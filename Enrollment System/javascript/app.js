@@ -1626,6 +1626,459 @@ function updatePayment() {
     document.getElementById('totalPayment').textContent = '₱' + total.toLocaleString();
 }
 
+// Section Data for Each Program
+const sectionData = {
+    'bs-computer-science': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'CS101', description: 'Introduction to Computing', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 101', 
+            instructor: 'Prof. Reyes', capacity: 30, available: 15 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'CS101', description: 'Introduction to Computing', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 102', 
+            instructor: 'Prof. Santos', capacity: 30, available: 18 
+        },
+        { 
+            id: '11M3', name: '11M3', 
+            subjectCode: 'CS101', description: 'Introduction to Computing', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:30 AM', end: '12:30 PM', room: 'Room 103', 
+            instructor: 'Prof. Cruz', capacity: 30, available: 20 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'CS102', description: 'Programming Fundamentals', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '12:30 PM', end: '4:30 PM', room: 'Room 104', 
+            instructor: 'Prof. Garcia', capacity: 30, available: 22 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'CS102', description: 'Programming Fundamentals', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 105', 
+            instructor: 'Prof. Torres', capacity: 30, available: 25 
+        },
+        { 
+            id: '11A3', name: '11A3', 
+            subjectCode: 'CS102', description: 'Programming Fundamentals', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:30 PM', end: '5:30 PM', room: 'Room 106', 
+            instructor: 'Prof. Ramos', capacity: 30, available: 28 
+        },
+        { 
+            id: '11E1', name: '11E1', 
+            subjectCode: 'CS103', description: 'Data Structures', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '5:30 PM', end: '9:30 PM', room: 'Room 107', 
+            instructor: 'Prof. Morales', capacity: 30, available: 20 
+        },
+        { 
+            id: '11E2', name: '11E2', 
+            subjectCode: 'CS103', description: 'Data Structures', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 108', 
+            instructor: 'Prof. Flores', capacity: 30, available: 25 
+        },
+        { 
+            id: '12M1', name: '12M1', 
+            subjectCode: 'CS201', description: 'Algorithms', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 109', 
+            instructor: 'Prof. Mendoza', capacity: 30, available: 12 
+        },
+        { 
+            id: '12A1', name: '12A1', 
+            subjectCode: 'CS201', description: 'Algorithms', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 110', 
+            instructor: 'Prof. Villanueva', capacity: 30, available: 15 
+        },
+        { 
+            id: '12E1', name: '12E1', 
+            subjectCode: 'CS201', description: 'Algorithms', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 111', 
+            instructor: 'Prof. Santiago', capacity: 30, available: 18 
+        }
+    ],
+    'bs-biotechnology': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'BT101', description: 'General Biology', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Lab 201', 
+            instructor: 'Prof. Aquino', capacity: 25, available: 10 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'BT101', description: 'General Biology', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Lab 202', 
+            instructor: 'Prof. Bautista', capacity: 25, available: 12 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'BT102', description: 'Microbiology', units: 3, type: 'Laboratory',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Lab 203', 
+            instructor: 'Prof. Castro', capacity: 25, available: 18 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'BT102', description: 'Microbiology', units: 3, type: 'Laboratory',
+            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Lab 204', 
+            instructor: 'Prof. Dela Cruz', capacity: 25, available: 20 
+        },
+        { 
+            id: '11E1', name: '11E1', 
+            subjectCode: 'BT103', description: 'Biochemistry', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Lab 205', 
+            instructor: 'Prof. Estanislao', capacity: 25, available: 22 
+        },
+        { 
+            id: '12M1', name: '12M1', 
+            subjectCode: 'BT201', description: 'Genetics', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Lab 206', 
+            instructor: 'Prof. Fernandez', capacity: 25, available: 8 
+        },
+        { 
+            id: '12A1', name: '12A1', 
+            subjectCode: 'BT201', description: 'Genetics', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Lab 207', 
+            instructor: 'Prof. Gonzales', capacity: 25, available: 10 
+        }
+    ],
+    'bs-business-admin': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'BA101', description: 'Principles of Management', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 301', 
+            instructor: 'Prof. Herrera', capacity: 40, available: 25 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'BA101', description: 'Principles of Management', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 302', 
+            instructor: 'Prof. Ignacio', capacity: 40, available: 28 
+        },
+        { 
+            id: '11M3', name: '11M3', 
+            subjectCode: 'BA101', description: 'Principles of Management', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:30 AM', end: '12:30 PM', room: 'Room 303', 
+            instructor: 'Prof. Javier', capacity: 40, available: 30 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'BA102', description: 'Business Mathematics', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '12:30 PM', end: '4:30 PM', room: 'Room 304', 
+            instructor: 'Prof. Kalaw', capacity: 40, available: 32 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'BA102', description: 'Business Mathematics', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 305', 
+            instructor: 'Prof. Laurel', capacity: 40, available: 35 
+        },
+        { 
+            id: '11A3', name: '11A3', 
+            subjectCode: 'BA102', description: 'Business Mathematics', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:30 PM', end: '5:30 PM', room: 'Room 306', 
+            instructor: 'Prof. Macapagal', capacity: 40, available: 38 
+        },
+        { 
+            id: '11E1', name: '11E1', 
+            subjectCode: 'BA103', description: 'Marketing Principles', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '5:30 PM', end: '9:30 PM', room: 'Room 307', 
+            instructor: 'Prof. Osmeña', capacity: 40, available: 30 
+        },
+        { 
+            id: '11E2', name: '11E2', 
+            subjectCode: 'BA103', description: 'Marketing Principles', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 308', 
+            instructor: 'Prof. Panganiban', capacity: 40, available: 35 
+        },
+        { 
+            id: '12M1', name: '12M1', 
+            subjectCode: 'BA201', description: 'Financial Management', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 309', 
+            instructor: 'Prof. Quirino', capacity: 40, available: 20 
+        },
+        { 
+            id: '12A1', name: '12A1', 
+            subjectCode: 'BA201', description: 'Financial Management', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 310', 
+            instructor: 'Prof. Recto', capacity: 40, available: 25 
+        },
+        { 
+            id: '12E1', name: '12E1', 
+            subjectCode: 'BA201', description: 'Financial Management', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 311', 
+            instructor: 'Prof. Roxas', capacity: 40, available: 28 
+        }
+    ],
+    'md-medicine': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'MD101', description: 'Human Anatomy', units: 5, type: 'Lecture',
+            days: 'Mon-Fri', start: '7:00 AM', end: '4:00 PM', room: 'Medical Building 1', 
+            instructor: 'Dr. Salgado', capacity: 50, available: 5 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'MD101', description: 'Human Anatomy', units: 5, type: 'Lecture',
+            days: 'Mon-Fri', start: '8:00 AM', end: '5:00 PM', room: 'Medical Building 2', 
+            instructor: 'Dr. Singson', capacity: 50, available: 8 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'MD102', description: 'Physiology', units: 5, type: 'Lecture',
+            days: 'Mon-Fri', start: '12:00 PM', end: '8:00 PM', room: 'Medical Building 3', 
+            instructor: 'Dr. Tolentino', capacity: 50, available: 10 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'MD102', description: 'Physiology', units: 5, type: 'Lecture',
+            days: 'Mon-Fri', start: '1:00 PM', end: '9:00 PM', room: 'Medical Building 4', 
+            instructor: 'Dr. Valenzuela', capacity: 50, available: 12 
+        }
+    ],
+    'bfa-fine-arts': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'FA101', description: 'Drawing Fundamentals', units: 3, type: 'Laboratory',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Art Studio 1', 
+            instructor: 'Prof. Abad Santos', capacity: 20, available: 12 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'FA101', description: 'Drawing Fundamentals', units: 3, type: 'Laboratory',
+            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Art Studio 2', 
+            instructor: 'Prof. Agoncillo', capacity: 20, available: 15 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'FA102', description: 'Color Theory', units: 3, type: 'Laboratory',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Art Studio 3', 
+            instructor: 'Prof. Aquino', capacity: 20, available: 18 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'FA102', description: 'Color Theory', units: 3, type: 'Laboratory',
+            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Art Studio 4', 
+            instructor: 'Prof. Bonifacio', capacity: 20, available: 16 
+        },
+        { 
+            id: '11E1', name: '11E1', 
+            subjectCode: 'FA103', description: 'Art History', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Art Studio 5', 
+            instructor: 'Prof. Del Pilar', capacity: 20, available: 14 
+        },
+        { 
+            id: '11E2', name: '11E2', 
+            subjectCode: 'FA103', description: 'Art History', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Art Studio 6', 
+            instructor: 'Prof. Diokno', capacity: 20, available: 17 
+        }
+    ],
+    'bs-international-relations': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'IR101', description: 'World Politics', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 401', 
+            instructor: 'Prof. Estrada', capacity: 35, available: 20 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'IR101', description: 'World Politics', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Room 402', 
+            instructor: 'Prof. Garcia', capacity: 35, available: 22 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'IR102', description: 'Diplomacy', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 403', 
+            instructor: 'Prof. Hernandez', capacity: 35, available: 25 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'IR102', description: 'Diplomacy', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Room 404', 
+            instructor: 'Prof. Laurel', capacity: 35, available: 28 
+        },
+        { 
+            id: '11E1', name: '11E1', 
+            subjectCode: 'IR103', description: 'International Law', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Room 405', 
+            instructor: 'Prof. Magsaysay', capacity: 35, available: 30 
+        },
+        { 
+            id: '12M1', name: '12M1', 
+            subjectCode: 'IR201', description: 'Global Economics', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 406', 
+            instructor: 'Prof. Osmena', capacity: 35, available: 18 
+        },
+        { 
+            id: '12A1', name: '12A1', 
+            subjectCode: 'IR201', description: 'Global Economics', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 407', 
+            instructor: 'Prof. Quezon', capacity: 35, available: 20 
+        }
+    ],
+    'bs-mathematics': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'MATH101', description: 'Calculus I', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 501', 
+            instructor: 'Prof. Recto', capacity: 30, available: 18 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'MATH101', description: 'Calculus I', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 502', 
+            instructor: 'Prof. Salazar', capacity: 30, available: 20 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'MATH102', description: 'Linear Algebra', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '12:30 PM', end: '4:30 PM', room: 'Room 503', 
+            instructor: 'Prof. Tan', capacity: 30, available: 22 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'MATH102', description: 'Linear Algebra', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 504', 
+            instructor: 'Prof. Ubalde', capacity: 30, available: 25 
+        },
+        { 
+            id: '11E1', name: '11E1', 
+            subjectCode: 'MATH103', description: 'Statistics', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '5:30 PM', end: '9:30 PM', room: 'Room 505', 
+            instructor: 'Prof. Villanueva', capacity: 30, available: 20 
+        },
+        { 
+            id: '11E2', name: '11E2', 
+            subjectCode: 'MATH103', description: 'Statistics', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 506', 
+            instructor: 'Prof. Yap', capacity: 30, available: 23 
+        },
+        { 
+            id: '12M1', name: '12M1', 
+            subjectCode: 'MATH201', description: 'Calculus II', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 507', 
+            instructor: 'Prof. Zobel', capacity: 30, available: 15 
+        },
+        { 
+            id: '12A1', name: '12A1', 
+            subjectCode: 'MATH201', description: 'Calculus II', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 508', 
+            instructor: 'Prof. Abellana', capacity: 30, available: 17 
+        }
+    ],
+    'bs-physics': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'PHY101', description: 'General Physics', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Lab 601', 
+            instructor: 'Prof. Calo', capacity: 25, available: 12 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'PHY101', description: 'General Physics', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Lab 602', capacity: 25, available: 14 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'PHY102', description: 'Mechanics', units: 3, type: 'Laboratory',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Lab 603', capacity: 25, available: 15 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'PHY102', description: 'Mechanics', units: 3, type: 'Laboratory',
+            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Lab 604', capacity: 25, available: 18 
+        },
+        { 
+            id: '11E1', name: '11E1', 
+            subjectCode: 'PHY103', description: 'Electricity & Magnetism', units: 3, type: 'Laboratory',
+            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Lab 605', capacity: 25, available: 20 
+        },
+        { 
+            id: '12M1', name: '12M1', 
+            subjectCode: 'PHY201', description: 'Thermodynamics', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Lab 606', capacity: 25, available: 10 
+        },
+        { 
+            id: '12A1', name: '12A1', 
+            subjectCode: 'PHY201', description: 'Thermodynamics', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Lab 607', capacity: 25, available: 12 
+        }
+    ],
+    'bs-architecture': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'ARCH101', description: 'Design Fundamentals', units: 3, type: 'Laboratory',
+            days: 'Mon-Fri', start: '8:00 AM', end: '3:00 PM', room: 'Design Studio 1', 
+            instructor: 'Prof. Arellano', capacity: 25, available: 8 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'ARCH101', description: 'Design Fundamentals', units: 3, type: 'Laboratory',
+            days: 'Mon-Fri', start: '9:00 AM', end: '4:00 PM', room: 'Design Studio 2', capacity: 25, available: 10 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'ARCH102', description: 'Architectural Drawing', units: 3, type: 'Laboratory',
+            days: 'Mon-Fri', start: '2:00 PM', end: '9:00 PM', room: 'Design Studio 3', capacity: 25, available: 12 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'ARCH102', description: 'Architectural Drawing', units: 3, type: 'Laboratory',
+            days: 'Mon-Fri', start: '3:00 PM', end: '10:00 PM', room: 'Design Studio 4', capacity: 25, available: 14 
+        },
+        { 
+            id: '12M1', name: '12M1', 
+            subjectCode: 'ARCH201', description: 'Building Materials', units: 3, type: 'Lecture',
+            days: 'Mon-Fri', start: '8:00 AM', end: '3:00 PM', room: 'Design Studio 5', capacity: 25, available: 6 
+        },
+        { 
+            id: '12A1', name: '12A1', 
+            subjectCode: 'ARCH201', description: 'Building Materials', units: 3, type: 'Lecture',
+            days: 'Mon-Fri', start: '2:00 PM', end: '9:00 PM', room: 'Design Studio 6', capacity: 25, available: 8 
+        }
+    ],
+    'default': [
+        { 
+            id: '11M1', name: '11M1', 
+            subjectCode: 'GEN101', description: 'General Education', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 101', 
+            instructor: 'Prof. Santos', capacity: 30, available: 15 
+        },
+        { 
+            id: '11M2', name: '11M2', 
+            subjectCode: 'GEN101', description: 'General Education', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Room 102', 
+            instructor: 'Prof. Reyes', capacity: 30, available: 18 
+        },
+        { 
+            id: '11A1', name: '11A1', 
+            subjectCode: 'GEN102', description: 'General Education', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 103', 
+            instructor: 'Prof. Cruz', capacity: 30, available: 20 
+        },
+        { 
+            id: '11A2', name: '11A2', 
+            subjectCode: 'GEN102', description: 'General Education', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Room 104', capacity: 30, available: 22 
+        },
+        { 
+            id: '11E1', name: '11E1', 
+            subjectCode: 'GEN103', description: 'General Education', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Room 105', capacity: 30, available: 25 
+        },
+        { 
+            id: '12M1', name: '12M1', 
+            subjectCode: 'GEN201', description: 'General Education', units: 3, type: 'Lecture',
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 106', capacity: 30, available: 12 
+        },
+        { 
+            id: '12A1', name: '12A1', 
+            subjectCode: 'GEN201', description: 'General Education', units: 3, type: 'Lecture',
+            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 107', capacity: 30, available: 15 
+        }
+    ]
+};
+
 // Modal Payment Calculation Function
 function updateModalPayment() {
     const programSearch = document.getElementById('modalProgramSearch');
@@ -1648,6 +2101,103 @@ function updateModalPayment() {
     document.getElementById('modalTuitionFee').textContent = '₱' + tuition.toLocaleString();
     document.getElementById('modalLabFee').textContent = '₱' + labFee.toLocaleString();
     document.getElementById('modalTotalPayment').textContent = '₱' + total.toLocaleString();
+    
+    // Show section selection modal if program is selected
+    if (selectedOption && programSelect.value) {
+        showSectionSelection(programSelect.value, programSearch.value);
+    }
+}
+
+// Section Selection Modal Functions
+function showSectionSelection(programValue, programName) {
+    const modal = document.getElementById('sectionSelectionModal');
+    const content = document.getElementById('sectionSelectionContent');
+    const programNameDisplay = document.getElementById('selectedProgramName');
+    const sectionOptions = document.getElementById('sectionOptions');
+    
+    programNameDisplay.textContent = programName;
+    
+    // Get sections for the selected program
+    const sections = sectionData[programValue] || sectionData['default'];
+    
+    // Populate section options with each section as a separate table/card
+    sectionOptions.innerHTML = sections.map(section => `
+        <div class="border border-gray-200 rounded-lg p-4 hover:border-[#007dfe] hover:bg-blue-50 cursor-pointer transition" onclick="selectSection('${section.id}', '${section.name}', '${section.days}', '${section.start} - ${section.end}', '${section.room}')">
+            <div class="flex justify-between items-start mb-3">
+                <div class="flex-1">
+                    <h4 class="font-bold text-[#007dfe] text-lg mb-1">${section.name}</h4>
+                    <div class="text-sm text-gray-600">${section.subjectCode} - ${section.description}</div>
+                </div>
+                <div class="text-right ml-4">
+                    <div class="text-sm text-gray-600">Slots Available</div>
+                    <div class="text-2xl font-bold ${section.available < 10 ? 'text-red-500' : 'text-green-500'}">${section.available}/${section.capacity}</div>
+                </div>
+            </div>
+            <table class="w-full text-sm mt-3">
+                <tbody>
+                    <tr class="border-b">
+                        <td class="py-2 font-medium text-gray-600 w-1/3">Units</td>
+                        <td class="py-2">${section.units}</td>
+                    </tr>
+                    <tr class="border-b">
+                        <td class="py-2 font-medium text-gray-600">Type</td>
+                        <td class="py-2">
+                            <span class="px-2 py-1 rounded-full text-xs ${section.type === 'Lecture' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">${section.type}</span>
+                        </td>
+                    </tr>
+                    <tr class="border-b">
+                        <td class="py-2 font-medium text-gray-600">Days</td>
+                        <td class="py-2">${section.days}</td>
+                    </tr>
+                    <tr class="border-b">
+                        <td class="py-2 font-medium text-gray-600">Time</td>
+                        <td class="py-2">${section.start} - ${section.end}</td>
+                    </tr>
+                    <tr class="border-b">
+                        <td class="py-2 font-medium text-gray-600">Room</td>
+                        <td class="py-2">${section.room}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 font-medium text-gray-600">Instructor</td>
+                        <td class="py-2">${section.instructor}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="w-full mt-3 bg-[#007dfe] text-white py-2 rounded-lg hover:bg-[#004b87] transition font-medium">Select Section</button>
+        </div>
+    `).join('');
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+}
+
+function hideSectionSelection() {
+    const modal = document.getElementById('sectionSelectionModal');
+    const content = document.getElementById('sectionSelectionContent');
+    
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    
+    setTimeout(() => {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }, 300);
+}
+
+function selectSection(sectionId, sectionName, days, time, room) {
+    const sectionSelect = document.getElementById('modalSectionSelect');
+    const sectionDisplay = document.getElementById('modalSectionDisplay');
+    
+    sectionSelect.value = sectionId;
+    sectionDisplay.value = `${sectionName} (${days}, ${time})`;
+    
+    hideSectionSelection();
+    
+    showToast(`Selected: ${sectionName} - ${days}, ${time}`, 'success');
 }
 
 // Toggle Online Payment Fields
