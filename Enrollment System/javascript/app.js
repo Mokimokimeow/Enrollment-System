@@ -1,49 +1,46 @@
-// Data Storage
-let students = JSON.parse(localStorage.getItem('students')) || [];
-let courses = JSON.parse(localStorage.getItem('courses')) || [
+// App State
+let currentUser = null;
+let students = [];
+let allStudents = [];
+let approvedStudents = [];
+let pendingStudents = [];
+let enrollments = [];
+let slides = [];
+let dots = [];
+let progressBar = null;
+let sliderInterval = null;
+let courses = [
     { id: 1, code: 'CS101', name: 'Introduction to Computer Science', description: 'Learn the basics of programming and computer science concepts' },
     { id: 2, code: 'MATH201', name: 'Calculus I', description: 'Differential and integral calculus fundamentals' },
     { id: 3, code: 'ENG102', name: 'English Composition', description: 'Academic writing and critical thinking skills' },
     { id: 4, code: 'PHY101', name: 'Physics Fundamentals', description: 'Introduction to mechanics and thermodynamics' },
     { id: 5, code: 'BIO201', name: 'Biology I', description: 'Cell biology and genetics' }
 ];
-let enrollments = JSON.parse(localStorage.getItem('enrollments')) || [];
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    // Show welcome page initially
-    showWelcome();
-    
-    loadStudentSelect();
+document.addEventListener('DOMContentLoaded', async () => {
+    initializeSlider();
+    await checkCurrentUser();
+    if (!currentUser) showWelcome();
     renderCourses();
-    updateAdminDashboard();
-    
-    // Registration form handler
-    document.getElementById('registrationForm').addEventListener('submit', handleRegistration);
-    
-    // Student select change handler
-    document.getElementById('studentSelect').addEventListener('change', handleStudentSelect);
-    
-    // Register modal form handler
-    document.getElementById('registerModalForm').addEventListener('submit', handleModalRegistration);
-    
-    // Start auto slider
+    const registrationForm = document.getElementById('registrationForm');
+    if (registrationForm) registrationForm.addEventListener('submit', handleRegistration);
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) loginForm.addEventListener('submit', handleLogin);
+    const registerModalForm = document.getElementById('registerModalForm');
+    if (registerModalForm) registerModalForm.addEventListener('submit', handleModalRegistration);
+    await fetchApprovedStudents();
+    await fetchPendingStudents();
+    loadStudentSelect();
     startAutoSlider();
-    
-    // Add event listener to Enroll Now button in slide 2
     setTimeout(() => {
         const enrollButton = document.getElementById('enrollNowButton');
         if (enrollButton) {
             enrollButton.addEventListener('click', function(e) {
                 e.preventDefault();
-                e.stopPropagation();
-                console.log('Enroll Now button clicked via event listener');
                 showRegisterModal();
                 return false;
             });
-            console.log('Enroll Now button event listener attached');
-        } else {
-            console.log('Enroll Now button not found');
         }
     }, 1000);
 });
@@ -52,31 +49,92 @@ document.addEventListener('DOMContentLoaded', () => {
 function showWelcome() {
     document.getElementById('welcomeNav').classList.remove('hidden');
     document.getElementById('mainNav').classList.add('hidden');
+    document.getElementById('tabNavigation').classList.remove('hidden');
     document.querySelectorAll('.section').forEach(section => {
         section.classList.add('hidden');
     });
     document.getElementById('welcome').classList.remove('hidden');
-    
-    // Restart auto-slider if it was stopped
+    // Ensure landing extras (news, footer) are visible
+    const newsSection = document.getElementById('news');
+    if (newsSection) newsSection.classList.remove('hidden');
+    const siteFooter = document.querySelector('footer');
+    if (siteFooter) siteFooter.classList.remove('hidden');
+
+    showSection('home');
     stopAutoSlider();
     startAutoSlider();
 }
 
-// Enter System
-function enterSystem() {
+function showAuthenticatedView(user) {
+    if (!user) {
+        showLoginModal();
+        return;
+    }
+
+    currentUser = user;
     document.getElementById('welcomeNav').classList.add('hidden');
     document.getElementById('mainNav').classList.remove('hidden');
-    document.getElementById('welcome').classList.add('hidden');
-    showSection('home');
+    document.getElementById('tabNavigation').classList.add('hidden');
+    document.querySelectorAll('.section').forEach(section => {
+        section.classList.add('hidden');
+    });
+
+    if (user.role === 'admin') {
+        document.getElementById('admin').classList.remove('hidden');
+        document.querySelectorAll('.admin-content').forEach(content => content.classList.add('hidden'));
+        document.getElementById('studentsTab').classList.remove('hidden');
+        document.querySelectorAll('.admin-tab').forEach(tab => {
+            tab.classList.remove('text-indigo-600', 'border-b-2', 'border-indigo-600');
+            tab.classList.add('text-gray-500');
+        });
+        const firstAdminTab = document.querySelector('.admin-tab');
+        if (firstAdminTab) {
+            firstAdminTab.classList.add('text-indigo-600', 'border-b-2', 'border-indigo-600');
+            firstAdminTab.classList.remove('text-gray-500');
+        }
+        updateAdminDashboard();
+    } else {
+        document.getElementById('dashboard').classList.remove('hidden');
+        document.getElementById('dashboard-tab').classList.add('active');
+        document.getElementById('home-tab').classList.remove('active');
+        showUserDashboard();
+    }
+
+    // Hide landing-specific sections when authenticated
+    const newsSection = document.getElementById('news');
+    if (newsSection) newsSection.classList.add('hidden');
+    const siteFooter = document.querySelector('footer');
+    if (siteFooter) siteFooter.classList.add('hidden');
+}
+
+function logoutUser() {
+    fetch('php/api.php?action=logout', { method: 'POST' })
+        .then(res => res.json())
+        .then(() => {
+            currentUser = null;
+            showWelcome();
+            // Restore landing extras on logout
+            const newsSection = document.getElementById('news');
+            if (newsSection) newsSection.classList.remove('hidden');
+            const siteFooter = document.querySelector('footer');
+            if (siteFooter) siteFooter.classList.remove('hidden');
+            showToast('Logged out successfully', 'success');
+        })
+        .catch(() => showToast('Could not log out', 'error'));
 }
 
 // Navigation
 function showSection(sectionId) {
+    if (sectionId === 'home') {
+        sectionId = 'welcome';
+    }
     document.querySelectorAll('.section').forEach(section => {
         section.classList.add('hidden');
     });
-    document.getElementById(sectionId).classList.remove('hidden');
-    
+    const sectionElement = document.getElementById(sectionId);
+    if (sectionElement) {
+        sectionElement.classList.remove('hidden');
+    }
     if (sectionId === 'enroll') {
         loadStudentSelect();
         renderCourses();
@@ -86,18 +144,23 @@ function showSection(sectionId) {
 }
 
 // Admin Tabs
-function showAdminTab(tabId) {
+function showAdminTab(tabId, button) {
     document.querySelectorAll('.admin-tab').forEach(tab => {
         tab.classList.remove('text-indigo-600', 'border-b-2', 'border-indigo-600');
         tab.classList.add('text-gray-500');
     });
-    event.target.classList.add('text-indigo-600', 'border-b-2', 'border-indigo-600');
-    event.target.classList.remove('text-gray-500');
+    if (button) {
+        button.classList.add('text-indigo-600', 'border-b-2', 'border-indigo-600');
+        button.classList.remove('text-gray-500');
+    }
     
     document.querySelectorAll('.admin-content').forEach(content => {
         content.classList.add('hidden');
     });
-    document.getElementById(tabId + 'Tab').classList.remove('hidden');
+    const tab = document.getElementById(tabId + 'Tab');
+    if (tab) {
+        tab.classList.remove('hidden');
+    }
 }
 
 // Toast Notification
@@ -116,44 +179,508 @@ function showToast(message, type = 'success') {
 }
 
 // Student Registration
-function handleRegistration(e) {
+async function handleRegistration(e) {
     e.preventDefault();
-    
-    const student = {
-        id: Date.now(),
-        fullName: document.getElementById('fullName').value,
+
+    const data = {
+        lastName: document.getElementById('lastName').value,
+        firstName: document.getElementById('firstName').value,
+        middleName: document.getElementById('middleName').value,
         email: document.getElementById('email').value,
         phone: document.getElementById('phone').value,
         dob: document.getElementById('dob').value,
         address: document.getElementById('address').value,
-        registeredDate: new Date().toISOString()
+        guardianName: document.getElementById('guardianName').value,
+        guardianPhone: document.getElementById('guardianPhone').value,
+        guardianEmail: document.getElementById('guardianEmail').value,
+        guardianRelationship: document.getElementById('guardianRelationship').value,
+        guardianAddress: document.getElementById('guardianAddress').value,
+        program: document.getElementById('programSelect').value,
+        section: document.getElementById('sectionSelect').value
     };
-    
-    students.push(student);
-    saveData();
-    
-    document.getElementById('registrationForm').reset();
-    showToast('Student registered successfully!');
-    showSection('home');
+
+    try {
+        const response = await fetch('php/api.php?action=register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.message, 'error');
+            return;
+        }
+
+        document.getElementById('registrationForm').reset();
+        showToast(result.message, 'success');
+        showSection('home');
+    } catch (error) {
+        showToast('Failed to submit registration. Please try again.', 'error');
+    }
 }
 
-// Load Student Select
-function loadStudentSelect() {
-    const select = document.getElementById('studentSelect');
-    select.innerHTML = '<option value="">-- Select a student --</option>';
+
+async function checkCurrentUser() {
+    try {
+        const response = await fetch('php/api.php?action=current_user');
+        const result = await response.json();
+        if (result.success && result.user) {
+            currentUser = result.user;
+            showAuthenticatedView(result.user);
+        } else {
+            currentUser = null;
+            showWelcome();
+        }
+    } catch (error) {
+        currentUser = null;
+        showWelcome();
+    }
+}
+
+function showLoginModal() {
+    const modal = document.getElementById('loginModal');
+    const content = document.getElementById('loginModalContent');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+}
+
+function hideLoginModal() {
+    const modal = document.getElementById('loginModal');
+    const content = document.getElementById('loginModalContent');
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) loginForm.reset();
+    }, 300);
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const role = document.getElementById('loginRole').value;
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    if (!email || !password) {
+        showToast('Please enter both email and password', 'error');
+        return;
+    }
+
+    // For demo purposes, handle admin login directly
+    if (role === 'admin') {
+        // Demo admin credentials
+        if (email === 'admin@biringan.edu' && password === 'admin123') {
+            currentUser = { email, role: 'admin', name: 'Admin User' };
+            hideLoginModal();
+            showAdminDashboard();
+            showToast('Admin login successful', 'success');
+            return;
+        } else {
+            showToast('Invalid admin credentials. Use admin@biringan.edu / admin123', 'error');
+            return;
+        }
+    }
+
+    // Student login (existing logic)
+    try {
+        const response = await fetch('php/api.php?action=login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.message, 'error');
+            return;
+        }
+
+        currentUser = result.user;
+        hideLoginModal();
+        showAuthenticatedView(result.user);
+        showToast('Login successful', 'success');
+    } catch (error) {
+        showToast('Login failed. Please try again.', 'error');
+    }
+}
+
+function showAdminDashboard() {
+    console.log('Showing admin dashboard');
     
-    students.forEach(student => {
-        const option = document.createElement('option');
-        option.value = student.id;
-        option.textContent = student.fullName;
-        select.appendChild(option);
+    // Hide main content wrapper
+    const mainContent = document.querySelector('main');
+    if (mainContent) {
+        mainContent.style.display = 'none';
+    }
+    
+    // Hide welcome navigation (the original top nav)
+    const welcomeNav = document.getElementById('welcomeNav');
+    if (welcomeNav) {
+        welcomeNav.classList.add('hidden');
+        welcomeNav.style.display = 'none';
+    }
+    
+    // Create admin navigation if it doesn't exist
+    let adminNav = document.getElementById('adminNav');
+    if (!adminNav) {
+        adminNav = document.createElement('nav');
+        adminNav.id = 'adminNav';
+        adminNav.className = 'bg-blue-600 shadow-lg fixed top-0 left-0 right-0 z-50';
+        adminNav.innerHTML = `
+            <div class="max-w-7xl mx-auto px-4">
+                <div class="flex justify-between items-center py-4">
+                    <div class="flex items-center space-x-3">
+                        <img src="img/new-logo.png" alt="Academy of Biringan Logo" class="h-10 w-auto" />
+                        <span class="text-white font-bold text-xl">JJKings Academy of Biringan - Admin</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-white font-medium">Welcome, Admin</span>
+                        <button onclick="handleLogoutClick()" class="bg-white text-[#004b87] px-4 py-2 rounded-lg hover:bg-gray-100 transition font-bold">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(adminNav);
+    } else {
+        adminNav.classList.remove('hidden');
+        adminNav.style.display = 'block';
+    }
+    
+    // Create a temporary admin container if it doesn't exist
+    let adminContainer = document.getElementById('adminContainer');
+    if (!adminContainer) {
+        adminContainer = document.createElement('div');
+        adminContainer.id = 'adminContainer';
+        adminContainer.className = 'w-full min-h-screen bg-gray-100 pt-20';
+        document.body.appendChild(adminContainer);
+    }
+    
+    // Move admin section to admin container
+    const adminSection = document.getElementById('admin');
+    if (adminSection) {
+        adminSection.classList.remove('hidden');
+        adminSection.style.display = 'block';
+        adminContainer.appendChild(adminSection);
+        console.log('Admin section shown');
+    } else {
+        console.error('Admin section not found');
+    }
+    
+    // Hide tab navigation for admin
+    const tabNav = document.getElementById('tabNavigation');
+    if (tabNav) {
+        tabNav.classList.add('hidden');
+        tabNav.style.display = 'none';
+    }
+    
+    // Hide footer for admin
+    const footer = document.querySelector('footer');
+    if (footer) {
+        footer.classList.add('hidden');
+        footer.style.display = 'none';
+    }
+    
+    // Hide search overlay
+    const searchOverlay = document.getElementById('searchOverlay');
+    if (searchOverlay) {
+        searchOverlay.classList.add('hidden');
+        searchOverlay.style.display = 'none';
+    }
+    
+    // Hide search trigger button
+    const searchTriggerButtons = document.querySelectorAll('button[onclick="openSearch()"]');
+    searchTriggerButtons.forEach(btn => {
+        btn.classList.add('hidden');
+        btn.style.display = 'none';
     });
+    
+    // Hide dark mode toggle
+    const darkModeToggle = document.querySelector('button[onclick="toggleDarkMode()"]');
+    if (darkModeToggle) {
+        darkModeToggle.classList.add('hidden');
+        darkModeToggle.style.display = 'none';
+    }
+    
+    // Hide language selector
+    const languageSelect = document.getElementById('languageSelect');
+    if (languageSelect) {
+        languageSelect.classList.add('hidden');
+        languageSelect.style.display = 'none';
+    }
+    
+    // Hide main navigation bar
+    const mainNav = document.getElementById('mainNav');
+    if (mainNav) {
+        mainNav.classList.add('hidden');
+        mainNav.style.display = 'none';
+    }
+    
+    // Change login button to logout button
+    const loginButton = document.querySelector('button[onclick="showLoginModal()"]');
+    if (loginButton) {
+        loginButton.onclick = handleLogoutClick;
+        loginButton.textContent = 'Logout';
+        loginButton.classList.remove('hidden');
+        loginButton.style.display = 'block';
+    }
+    
+    // Hide enroll button
+    const enrollButton = document.querySelector('button[onclick="showRegisterModal()"]');
+    if (enrollButton) {
+        enrollButton.classList.add('hidden');
+        enrollButton.style.display = 'none';
+    }
+    
+    // Update navigation for admin
+    const authButtons = document.getElementById('authButtons');
+    if (authButtons) {
+        authButtons.classList.remove('hidden');
+        authButtons.style.display = 'flex';
+    }
+    
+    const userNav = document.getElementById('userNav');
+    if (userNav) {
+        userNav.classList.remove('hidden');
+        userNav.style.display = 'flex';
+    }
+    
+    const userName = document.getElementById('userName');
+    if (userName) {
+        userName.textContent = 'Admin';
+    }
+    
+    // Load admin data
+    loadEnrollmentApplications();
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Handle Student Select
-function handleStudentSelect(e) {
-    const studentId = parseInt(e.target.value);
-    renderEnrolledCourses(studentId);
+function handleLogoutClick() {
+    if (confirm('Are you sure you want to logout?')) {
+        logoutAdmin();
+    }
+}
+
+function logoutAdmin() {
+    // Show main content wrapper
+    const mainContent = document.querySelector('main');
+    if (mainContent) {
+        mainContent.style.display = 'block';
+    }
+    
+    // Remove admin container
+    const adminContainer = document.getElementById('adminContainer');
+    if (adminContainer) {
+        adminContainer.remove();
+    }
+    
+    // Move admin section back to main content
+    const adminSection = document.getElementById('admin');
+    if (adminSection) {
+        adminSection.classList.add('hidden');
+        adminSection.style.display = 'none';
+        mainContent.appendChild(adminSection);
+    }
+    
+    // Hide admin navigation
+    const adminNav = document.getElementById('adminNav');
+    if (adminNav) {
+        adminNav.classList.add('hidden');
+        adminNav.style.display = 'none';
+    }
+    
+    // Show welcome navigation (the original top nav)
+    const welcomeNav = document.getElementById('welcomeNav');
+    if (welcomeNav) {
+        welcomeNav.classList.remove('hidden');
+        welcomeNav.style.display = 'block';
+    }
+    
+    // Show tab navigation
+    const tabNav = document.getElementById('tabNavigation');
+    if (tabNav) {
+        tabNav.classList.remove('hidden');
+        tabNav.style.display = 'block';
+    }
+    
+    // Show footer
+    const footer = document.querySelector('footer');
+    if (footer) {
+        footer.classList.remove('hidden');
+        footer.style.display = 'block';
+    }
+    
+    // Show search trigger button
+    const searchTriggerButtons = document.querySelectorAll('button[onclick="openSearch()"]');
+    searchTriggerButtons.forEach(btn => {
+        btn.classList.remove('hidden');
+        btn.style.display = 'flex';
+    });
+    
+    // Show dark mode toggle
+    const darkModeToggle = document.querySelector('button[onclick="toggleDarkMode()"]');
+    if (darkModeToggle) {
+        darkModeToggle.classList.remove('hidden');
+        darkModeToggle.style.display = 'block';
+    }
+    
+    // Show language selector
+    const languageSelect = document.getElementById('languageSelect');
+    if (languageSelect) {
+        languageSelect.classList.remove('hidden');
+        languageSelect.style.display = 'block';
+    }
+    
+    // Hide main navigation bar (if it exists)
+    const mainNav = document.getElementById('mainNav');
+    if (mainNav) {
+        mainNav.classList.add('hidden');
+        mainNav.style.display = 'none';
+    }
+    
+    // Change logout button back to login button
+    const logoutButton = document.querySelector('button[onclick="handleLogoutClick()"]');
+    if (logoutButton) {
+        logoutButton.onclick = showLoginModal;
+        logoutButton.textContent = 'Login';
+    }
+    
+    // Show enroll button
+    const enrollButton = document.querySelector('button[onclick="showRegisterModal()"]');
+    if (enrollButton) {
+        enrollButton.classList.remove('hidden');
+        enrollButton.style.display = 'block';
+    }
+    
+    // Hide user nav
+    const userNav = document.getElementById('userNav');
+    if (userNav) {
+        userNav.classList.add('hidden');
+        userNav.style.display = 'none';
+    }
+    
+    // Show auth buttons
+    const authButtons = document.getElementById('authButtons');
+    if (authButtons) {
+        authButtons.classList.remove('hidden');
+        authButtons.style.display = 'flex';
+    }
+    
+    // Hide all sections first
+    document.querySelectorAll('.section').forEach(section => {
+        section.classList.add('hidden');
+    });
+    
+    // Show welcome section (home)
+    const welcomeSection = document.getElementById('welcome');
+    if (welcomeSection) {
+        welcomeSection.classList.remove('hidden');
+    }
+    
+    // Show news section
+    const newsSection = document.getElementById('news');
+    if (newsSection) {
+        newsSection.classList.remove('hidden');
+    }
+    
+    // Reset to home tab
+    switchTab('home');
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    showToast('Logged out successfully', 'success');
+}
+
+async function fetchAllStudents() {
+    try {
+        const response = await fetch('php/api.php?action=students');
+        const result = await response.json();
+        if (result.success) {
+            allStudents = result.students.map(student => ({
+                ...student,
+                fullName: `${student.first_name} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name}`.trim()
+            }));
+        }
+    } catch (error) {
+        console.error('Failed to fetch students', error);
+        allStudents = [];
+    }
+}
+
+async function fetchApprovedStudents() {
+    try {
+        const response = await fetch('php/api.php?action=students&status=approved');
+        const result = await response.json();
+        if (result.success) {
+            approvedStudents = result.students.map(student => ({
+                ...student,
+                fullName: `${student.first_name} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name}`.trim()
+            }));
+            students = approvedStudents;
+        }
+    } catch (error) {
+        console.error('Failed to fetch approved students', error);
+        approvedStudents = [];
+        students = [];
+    }
+}
+
+async function fetchPendingStudents() {
+    try {
+        const response = await fetch('php/api.php?action=pending_students');
+        const result = await response.json();
+        if (result.success) {
+            pendingStudents = result.students.map(student => ({
+                ...student,
+                fullName: `${student.first_name} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name}`.trim()
+            }));
+        }
+    } catch (error) {
+        console.error('Failed to fetch pending students', error);
+        pendingStudents = [];
+    }
+}
+
+async function approveStudent(studentId) {
+    try {
+        const response = await fetch('php/api.php?action=approve_student', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentId })
+        });
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.message, 'error');
+            return;
+        }
+        showToast(result.message, 'success');
+        await updateAdminDashboard();
+    } catch (error) {
+        showToast('Failed to approve student. Please try again.', 'error');
+    }
+}
+
+function renderPendingStudentCount() {
+    const pendingCountEl = document.getElementById('pendingApplications');
+    if (pendingCountEl) {
+        pendingCountEl.textContent = pendingStudents.length;
+    }
+}
+
+function showUserDashboard() {
+    const header = document.querySelector('#dashboard h2');
+    if (header && currentUser) {
+        header.textContent = `Welcome back, ${currentUser.firstName} ${currentUser.lastName}`;
+    }
 }
 
 // Render Courses
@@ -258,40 +785,41 @@ function unenrollFromCourse(enrollmentId) {
 }
 
 // Update Admin Dashboard
-function updateAdminDashboard() {
-    // Update stats
-    document.getElementById('totalStudents').textContent = students.length;
+async function updateAdminDashboard() {
+    await fetchAllStudents();
+    await fetchApprovedStudents();
+    await fetchPendingStudents();
+    document.getElementById('totalStudents').textContent = allStudents.length;
     document.getElementById('totalEnrollments').textContent = enrollments.length;
     document.getElementById('totalCourses').textContent = courses.length;
-    
-    // Render students table
     renderStudentsTable();
-    
-    // Render enrollments table
     renderEnrollmentsTable();
-    
-    // Render courses table
     renderCoursesTable();
+    renderPendingStudentCount();
 }
 
 // Render Students Table
 function renderStudentsTable() {
     const tbody = document.getElementById('studentsTableBody');
     tbody.innerHTML = '';
-    
-    students.forEach(student => {
+    allStudents.forEach(student => {
         const row = document.createElement('tr');
         row.className = 'border-b hover:bg-gray-50';
+        const fullName = student.fullName || `${student.first_name} ${student.middle_name ? student.middle_name + ' ' : ''}${student.last_name}`.trim();
+        const status = student.status || 'pending';
+        const actionButtons = [];
+        if (status === 'pending') {
+            actionButtons.push(`<button onclick="approveStudent(${student.id})" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition mr-2">Approve</button>`);
+        }
+        actionButtons.push(`<button onclick="deleteStudent(${student.id})" class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition">Delete</button>`);
+
         row.innerHTML = `
             <td class="px-4 py-3 text-gray-800">${student.id}</td>
-            <td class="px-4 py-3 text-gray-800">${student.fullName}</td>
+            <td class="px-4 py-3 text-gray-800">${fullName}</td>
             <td class="px-4 py-3 text-gray-800">${student.email}</td>
             <td class="px-4 py-3 text-gray-800">${student.phone}</td>
-            <td class="px-4 py-3">
-                <button onclick="deleteStudent(${student.id})" class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition">
-                    Delete
-                </button>
-            </td>
+            <td class="px-4 py-3 text-gray-800">${status}</td>
+            <td class="px-4 py-3">${actionButtons.join('')}</td>
         `;
         tbody.appendChild(row);
     });
@@ -301,7 +829,6 @@ function renderStudentsTable() {
 function renderEnrollmentsTable() {
     const tbody = document.getElementById('enrollmentsTableBody');
     tbody.innerHTML = '';
-    
     enrollments.forEach(enrollment => {
         const student = students.find(s => s.id === enrollment.studentId);
         const course = courses.find(c => c.id === enrollment.courseId);
@@ -351,7 +878,6 @@ function deleteStudent(studentId) {
     if (confirm('Are you sure you want to delete this student?')) {
         students = students.filter(s => s.id !== studentId);
         enrollments = enrollments.filter(e => e.studentId !== studentId);
-        saveData();
         updateAdminDashboard();
         showToast('Student deleted successfully');
     }
@@ -401,53 +927,135 @@ function addCourse() {
 
 // Save Data to LocalStorage
 function saveData() {
-    localStorage.setItem('students', JSON.stringify(students));
-    localStorage.setItem('courses', JSON.stringify(courses));
-    localStorage.setItem('enrollments', JSON.stringify(enrollments));
+    // No-op in API mode
+}
+
+// Toggle Grade/Strand Selection based on Level
+function toggleGradeStrandSelection() {
+    const levelSelect = document.getElementById('modalLevel');
+    const gradeLevelContainer = document.getElementById('gradeLevelContainer');
+    const strandContainer = document.getElementById('strandContainer');
+    const voucherEligibilityContainer = document.getElementById('voucherEligibilityContainer');
+    
+    const selectedLevel = levelSelect.value;
+    
+    if (selectedLevel === 'junior-high') {
+        gradeLevelContainer.style.display = 'block';
+        strandContainer.style.display = 'none';
+        voucherEligibilityContainer.style.display = 'none';
+        document.getElementById('modalGradeLevel').required = true;
+        document.getElementById('modalStrand').required = false;
+        document.getElementById('modalVoucherEligibility').required = false;
+        updatePaymentSummary();
+    } else if (selectedLevel === 'senior-high') {
+        gradeLevelContainer.style.display = 'none';
+        strandContainer.style.display = 'block';
+        voucherEligibilityContainer.style.display = 'block';
+        document.getElementById('modalGradeLevel').required = false;
+        document.getElementById('modalStrand').required = true;
+        document.getElementById('modalVoucherEligibility').required = true;
+        updatePaymentSummary();
+    } else {
+        gradeLevelContainer.style.display = 'none';
+        strandContainer.style.display = 'none';
+        voucherEligibilityContainer.style.display = 'none';
+        document.getElementById('modalGradeLevel').required = false;
+        document.getElementById('modalStrand').required = false;
+        document.getElementById('modalVoucherEligibility').required = false;
+        updatePaymentSummary();
+    }
+}
+
+// Update Payment Summary based on level and voucher eligibility
+function updatePaymentSummary() {
+    const levelSelect = document.getElementById('modalLevel');
+    const voucherEligibility = document.getElementById('modalVoucherEligibility');
+    const uniformFeeRow = document.getElementById('uniformFeeRow');
+    const voucherRow = document.getElementById('voucherRow');
+    const voucherNote = document.getElementById('voucherNote');
+    const selectLevelNote = document.getElementById('selectLevelNote');
+    const modalTuitionFee = document.getElementById('modalTuitionFee');
+    const modalTotalPayment = document.getElementById('modalTotalPayment');
+    
+    const selectedLevel = levelSelect.value;
+    const selectedVoucher = voucherEligibility ? voucherEligibility.value : '';
+    
+    // Base fees
+    const tuitionFee = 25000;
+    const registrationFee = 500;
+    const labFee = 1000;
+    const libraryFee = 500;
+    const idFee = 200;
+    const uniformFee = 3000;
+    const voucherAmount = 27000; // Covers tuition + registration + lab + library + ID
+    
+    let total = 0;
+    
+    if (selectedLevel === 'junior-high') {
+        // Junior High pays full fees
+        total = tuitionFee + registrationFee + labFee + libraryFee + idFee;
+        modalTuitionFee.textContent = '₱' + tuitionFee.toLocaleString();
+        uniformFeeRow.style.display = 'none';
+        voucherRow.style.display = 'none';
+        voucherNote.style.display = 'none';
+        selectLevelNote.style.display = 'none';
+    } else if (selectedLevel === 'senior-high') {
+        if (selectedVoucher === 'public-school' || selectedVoucher === 'same-school') {
+            // Voucher eligible - pay only uniform fee
+            total = uniformFee;
+            modalTuitionFee.textContent = '₱' + tuitionFee.toLocaleString();
+            uniformFeeRow.style.display = 'flex';
+            voucherRow.style.display = 'flex';
+            voucherNote.style.display = 'block';
+            selectLevelNote.style.display = 'none';
+        } else if (selectedVoucher === 'private-school') {
+            // No voucher - pay full fees
+            total = tuitionFee + registrationFee + labFee + libraryFee + idFee;
+            modalTuitionFee.textContent = '₱' + tuitionFee.toLocaleString();
+            uniformFeeRow.style.display = 'none';
+            voucherRow.style.display = 'none';
+            voucherNote.style.display = 'none';
+            selectLevelNote.style.display = 'none';
+        } else {
+            // Not selected yet - show full fees
+            total = tuitionFee + registrationFee + labFee + libraryFee + idFee;
+            modalTuitionFee.textContent = '₱' + tuitionFee.toLocaleString();
+            uniformFeeRow.style.display = 'none';
+            voucherRow.style.display = 'none';
+            voucherNote.style.display = 'none';
+            selectLevelNote.style.display = 'none';
+        }
+    } else {
+        // Not selected - show default
+        total = 0;
+        modalTuitionFee.textContent = '₱0';
+        uniformFeeRow.style.display = 'none';
+        voucherRow.style.display = 'none';
+        voucherNote.style.display = 'none';
+        selectLevelNote.style.display = 'block';
+    }
+    
+    modalTotalPayment.textContent = '₱' + total.toLocaleString();
 }
 
 // Register Modal Functions
 function showRegisterModal() {
-    console.log('showRegisterModal called');
     const modal = document.getElementById('registerModal');
     const content = document.getElementById('registerModalContent');
-    
-    console.log('Modal element:', modal);
-    console.log('Content element:', content);
-    console.log('Modal exists:', !!modal);
-    console.log('Content exists:', !!content);
-    
-    if (!modal) {
-        console.error('Modal element not found!');
-        return;
-    }
-    
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    
-    console.log('Modal classes after:', modal.className);
-    console.log('Modal display:', window.getComputedStyle(modal).display);
-    
-    // Trigger animation
     setTimeout(() => {
         modal.classList.remove('opacity-0');
-        if (content) {
-            content.classList.remove('scale-95', 'opacity-0');
-            content.classList.add('scale-100', 'opacity-100');
-        }
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
     }, 10);
 }
 
 function hideRegisterModal() {
     const modal = document.getElementById('registerModal');
     const content = document.getElementById('registerModalContent');
-    
-    // Animate out
-    modal.classList.add('opacity-0');
     content.classList.remove('scale-100', 'opacity-100');
     content.classList.add('scale-95', 'opacity-0');
-    
-    // Hide after animation completes
     setTimeout(() => {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
@@ -489,18 +1097,13 @@ function confirmClose() {
 // Handle Modal Registration
 function handleModalRegistration(e) {
     e.preventDefault();
-    
-    // Validate form
     const form = document.getElementById('registerModalForm');
     const requiredFields = form.querySelectorAll('[required]');
     let isValid = true;
-    
     requiredFields.forEach(field => {
         if (!field.value.trim()) {
             isValid = false;
             field.classList.add('border-red-500');
-            
-            // Add error message if not exists
             let errorMsg = field.parentNode.querySelector('.error-message');
             if (!errorMsg) {
                 errorMsg = document.createElement('span');
@@ -516,7 +1119,6 @@ function handleModalRegistration(e) {
             }
         }
     });
-    
     if (isValid) {
         showRegistrationConfirmation();
     } else {
@@ -617,9 +1219,8 @@ function processOnlinePayment() {
     }, 2000);
 }
 
-function completeRegistration(paymentMethod) {
-    const student = {
-        id: Date.now(),
+async function completeRegistration(paymentMethod) {
+    const data = {
         lastName: document.getElementById('modalLastName').value,
         firstName: document.getElementById('modalFirstName').value,
         middleName: document.getElementById('modalMiddleName').value,
@@ -631,41 +1232,51 @@ function completeRegistration(paymentMethod) {
         guardianPhone: document.getElementById('modalGuardianPhone').value,
         guardianEmail: document.getElementById('modalGuardianEmail').value,
         guardianRelationship: document.getElementById('modalGuardianRelationship').value,
+        guardianAddress: document.getElementById('modalGuardianAddress').value,
         program: document.getElementById('modalProgramSelect').value || document.getElementById('modalProgramSearch').value,
-        section: document.getElementById('modalSectionSelect').value,
-        paymentMethod: paymentMethod,
-        totalPayment: document.getElementById('modalTotalPayment').textContent,
-        paymentStatus: 'paid',
-        registeredDate: new Date().toISOString()
+        section: document.getElementById('modalSectionSelect').value
     };
-    
-    students.push(student);
-    saveData();
-    
-    hideRegistrationConfirmation();
-    document.getElementById('registerModalForm').reset();
-    
-    // Reset online payment fields visibility
-    document.getElementById('onlinePaymentDetails').classList.add('hidden');
-    document.getElementById('modalCardNumber').removeAttribute('required');
-    document.getElementById('modalCardExpiry').removeAttribute('required');
-    document.getElementById('modalCardCvv').removeAttribute('required');
-    
-    hideRegisterModal();
-    
-    if (paymentMethod === 'online') {
-        showToast('Payment successful! Enrollment complete. Welcome to our university.', 'success');
-    } else {
-        showToast('Enrollment successful! Please proceed to the cashier for payment. Welcome to our university.', 'success');
+
+    try {
+        const response = await fetch('php/api.php?action=register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (!result.success) {
+            showToast(result.message, 'error');
+            return;
+        }
+        hideRegistrationConfirmation();
+        document.getElementById('registerModalForm').reset();
+        document.getElementById('onlinePaymentDetails').classList.add('hidden');
+        document.getElementById('modalCardNumber').removeAttribute('required');
+        document.getElementById('modalCardExpiry').removeAttribute('required');
+        document.getElementById('modalCardCvv').removeAttribute('required');
+        hideRegisterModal();
+        showToast('Registration submitted. Await admin approval.', 'success');
+    } catch (error) {
+        showToast('Failed to submit registration. Please try again.', 'error');
     }
 }
 
 // Slider Functions
 let currentSlide = 0;
-const slides = document.querySelectorAll('.slide');
-const dots = document.querySelectorAll('.slider-dot');
-const progressBar = document.getElementById('sliderProgress');
-let sliderInterval;
+
+function initializeSlider() {
+    slides = Array.from(document.querySelectorAll('.slide'));
+    dots = Array.from(document.querySelectorAll('.slider-dot'));
+    progressBar = document.getElementById('sliderProgress');
+    const sliderContainer = document.getElementById('slider');
+    if (sliderContainer) {
+        sliderContainer.addEventListener('mouseenter', stopAutoSlider);
+        sliderContainer.addEventListener('mouseleave', startAutoSlider);
+    }
+    if (slides.length) {
+        goToSlide(0);
+    }
+}
 
 function goToSlide(index) {
     // Hide all slides with scale animation
@@ -726,6 +1337,7 @@ if (sliderContainer) {
 
 // Scroll to Top Button
 const scrollTopBtn = document.getElementById('scrollTopBtn');
+const tabNavigation = document.getElementById('tabNavigation');
 
 window.addEventListener('scroll', () => {
     if (window.scrollY > 300) {
@@ -735,7 +1347,340 @@ window.addEventListener('scroll', () => {
         scrollTopBtn.classList.add('translate-y-20', 'opacity-0');
         scrollTopBtn.classList.remove('translate-y-0', 'opacity-100');
     }
+
+    // Tab navigation transparency on scroll
+    if (window.scrollY > 50) {
+        tabNavigation.classList.remove('bg-transparent', 'shadow-none');
+        tabNavigation.classList.add('bg-white', 'shadow-md');
+    } else {
+        tabNavigation.classList.add('bg-transparent', 'shadow-none');
+        tabNavigation.classList.remove('bg-white', 'shadow-md');
+    }
 });
+
+// Student Dashboard Functions
+function updateStudentDashboard(enrollmentData) {
+    // Update status workflow
+    updateDashboardStatusWorkflow(enrollmentData.status);
+    
+    // Update academic info
+    document.getElementById('dashboardLevel').textContent = enrollmentData.level || 'Senior High';
+    document.getElementById('dashboardStrand').textContent = enrollmentData.strand || 'STEM Strand';
+    document.getElementById('dashLevel').textContent = enrollmentData.level || 'Senior High';
+    document.getElementById('dashGradeStrand').textContent = enrollmentData.strand || 'STEM';
+    document.getElementById('dashLRN').textContent = enrollmentData.lrn || '123456789012';
+    document.getElementById('dashPreviousSchool').textContent = enrollmentData.previousSchool || 'Biringan High School';
+    
+    // Update voucher status
+    document.getElementById('dashboardVoucherStatus').textContent = enrollmentData.voucherStatus || 'Pending';
+    document.getElementById('dashboardVoucherType').textContent = enrollmentData.voucherType || 'Public School Graduate';
+    document.getElementById('dashboardVoucherEligibility').textContent = enrollmentData.voucherType || 'Public School Graduate';
+    document.getElementById('dashboardVoucherVerification').textContent = enrollmentData.voucherVerification || 'Under Verification';
+    
+    // Update payment summary based on voucher
+    if (enrollmentData.voucherEligible) {
+        document.getElementById('dashboardTuition').textContent = '₱25,000';
+        document.getElementById('dashboardUniformRow').style.display = 'flex';
+        document.getElementById('dashboardVoucherRow').style.display = 'flex';
+        document.getElementById('dashboardTotal').textContent = '₱3,000';
+        document.getElementById('dashboardPaymentStatus').textContent = '₱3,000';
+    } else {
+        document.getElementById('dashboardTuition').textContent = '₱25,000';
+        document.getElementById('dashboardUniformRow').style.display = 'none';
+        document.getElementById('dashboardVoucherRow').style.display = 'none';
+        document.getElementById('dashboardTotal').textContent = '₱27,200';
+        document.getElementById('dashboardPaymentStatus').textContent = '₱27,200';
+    }
+    
+    // Show admin requests if any
+    if (enrollmentData.adminRequest) {
+        document.getElementById('adminRequestsSection').style.display = 'block';
+        document.getElementById('adminRequestMessage').textContent = enrollmentData.adminRequest;
+    }
+}
+
+function updateDashboardStatusWorkflow(status) {
+    const step1 = document.querySelector('#dashboard .w-8.bg-\\[\\#007dfe\\]');
+    const step2 = document.getElementById('step2');
+    const step3 = document.getElementById('step3');
+    const step4 = document.getElementById('step4');
+    const statusBar = document.getElementById('statusBar');
+    const statusPercent = document.getElementById('statusPercent');
+    const currentStatusText = document.getElementById('currentStatusText');
+    
+    // Reset all steps
+    step1.className = 'w-8 h-8 bg-gray-300 text-white rounded-full flex items-center justify-center mx-auto mb-1';
+    step2.className = 'w-8 h-8 bg-gray-300 text-white rounded-full flex items-center justify-center mx-auto mb-1';
+    step3.className = 'w-8 h-8 bg-gray-300 text-white rounded-full flex items-center justify-center mx-auto mb-1';
+    step4.className = 'w-8 h-8 bg-gray-300 text-white rounded-full flex items-center justify-center mx-auto mb-1';
+    
+    if (status === 'submitted') {
+        step1.className = 'w-8 h-8 bg-[#007dfe] text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step1.textContent = '✓';
+        statusBar.style.width = '25%';
+        statusPercent.textContent = '25%';
+        currentStatusText.textContent = 'Current Status: Submitted';
+    } else if (status === 'under-review') {
+        step1.className = 'w-8 h-8 bg-[#007dfe] text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step1.textContent = '✓';
+        step2.className = 'w-8 h-8 bg-[#007dfe] text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step2.textContent = '✓';
+        statusBar.style.width = '50%';
+        statusPercent.textContent = '50%';
+        currentStatusText.textContent = 'Current Status: Under Review';
+    } else if (status === 'approved') {
+        step1.className = 'w-8 h-8 bg-[#007dfe] text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step1.textContent = '✓';
+        step2.className = 'w-8 h-8 bg-[#007dfe] text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step2.textContent = '✓';
+        step3.className = 'w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step3.textContent = '✓';
+        statusBar.style.width = '75%';
+        statusPercent.textContent = '75%';
+        currentStatusText.textContent = 'Current Status: Approved';
+    } else if (status === 'enrolled') {
+        step1.className = 'w-8 h-8 bg-[#007dfe] text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step1.textContent = '✓';
+        step2.className = 'w-8 h-8 bg-[#007dfe] text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step2.textContent = '✓';
+        step3.className = 'w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step3.textContent = '✓';
+        step4.className = 'w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step4.textContent = '✓';
+        statusBar.style.width = '100%';
+        statusPercent.textContent = '100%';
+        currentStatusText.textContent = 'Current Status: Enrolled';
+    } else if (status === 'rejected') {
+        step1.className = 'w-8 h-8 bg-[#007dfe] text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step1.textContent = '✓';
+        step2.className = 'w-8 h-8 bg-[#007dfe] text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step2.textContent = '✓';
+        step3.className = 'w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center mx-auto mb-1';
+        step3.textContent = '✗';
+        statusBar.style.width = '50%';
+        statusPercent.textContent = '50%';
+        currentStatusText.textContent = 'Current Status: Rejected';
+    }
+}
+
+// Load mock enrollment data for student dashboard
+function loadStudentDashboard() {
+    // Mock data - in real implementation, this would come from backend
+    const mockEnrollmentData = {
+        status: 'submitted',
+        level: 'Senior High',
+        strand: 'STEM',
+        lrn: '123456789012',
+        previousSchool: 'Biringan High School',
+        voucherStatus: 'Pending',
+        voucherType: 'Public School Graduate',
+        voucherVerification: 'Under Verification',
+        voucherEligible: true,
+        adminRequest: null
+    };
+    
+    updateStudentDashboard(mockEnrollmentData);
+}
+
+// Load student dashboard when dashboard tab is shown
+const originalSwitchTab = switchTab;
+switchTab = function(tabName) {
+    originalSwitchTab(tabName);
+    if (tabName === 'dashboard') {
+        loadStudentDashboard();
+    }
+};
+
+// Admin Enrollment Review Functions
+function openEnrollmentReviewModal(enrollmentId) {
+    const modal = document.getElementById('enrollmentReviewModal');
+    modal.classList.remove('hidden');
+    
+    // Populate modal with enrollment data (mock data for now)
+    document.getElementById('reviewName').textContent = 'Juan Dela Cruz';
+    document.getElementById('reviewDob').textContent = '2008-05-15';
+    document.getElementById('reviewGender').textContent = 'Male';
+    document.getElementById('reviewCivilStatus').textContent = 'Single';
+    document.getElementById('reviewNationality').textContent = 'Filipino';
+    document.getElementById('reviewReligion').textContent = 'Roman Catholic';
+    document.getElementById('reviewAddress').textContent = '123 Main St, Biringan City';
+    document.getElementById('reviewMobile').textContent = '09123456789';
+    document.getElementById('reviewEmail').textContent = 'juan@example.com';
+    
+    document.getElementById('reviewElementary').textContent = 'Biringan Elementary School';
+    document.getElementById('reviewElementaryYear').textContent = '2020';
+    document.getElementById('reviewLRN').textContent = '123456789012';
+    document.getElementById('reviewHighSchool').textContent = 'Biringan High School';
+    document.getElementById('reviewHighSchoolYear').textContent = '2024';
+    document.getElementById('reviewGrade10Section').textContent = 'Section A';
+    document.getElementById('reviewSeniorHigh').textContent = 'N/A';
+    document.getElementById('reviewPublicSchool').textContent = 'Yes';
+    
+    document.getElementById('reviewLevel').textContent = 'Senior High';
+    document.getElementById('reviewGradeStrand').textContent = 'STEM';
+    document.getElementById('reviewVoucherEligibility').textContent = 'From Public School (Voucher Eligible)';
+    
+    // Update payment summary based on voucher eligibility
+    document.getElementById('reviewTuition').textContent = '₱25,000';
+    document.getElementById('reviewUniformRow').style.display = 'flex';
+    document.getElementById('reviewVoucherRow').style.display = 'flex';
+    document.getElementById('reviewTotal').textContent = '₱3,000';
+    
+    // Update status workflow
+    updateStatusWorkflow('under-review');
+}
+
+function closeEnrollmentReviewModal() {
+    const modal = document.getElementById('enrollmentReviewModal');
+    modal.classList.add('hidden');
+}
+
+function updateStatusWorkflow(status) {
+    const step1 = document.getElementById('statusStep1');
+    const step2 = document.getElementById('statusStep2');
+    const step3 = document.getElementById('statusStep3');
+    const statusText = document.getElementById('currentStatusText');
+    
+    // Reset all steps
+    step1.className = 'flex-1 text-center p-2 rounded bg-gray-200 text-gray-600';
+    step2.className = 'flex-1 text-center p-2 rounded bg-gray-200 text-gray-600';
+    step3.className = 'flex-1 text-center p-2 rounded bg-gray-200 text-gray-600';
+    
+    if (status === 'submitted') {
+        step1.className = 'flex-1 text-center p-2 rounded bg-yellow-500 text-white';
+        statusText.textContent = 'Current Status: Submitted';
+    } else if (status === 'under-review') {
+        step1.className = 'flex-1 text-center p-2 rounded bg-green-500 text-white';
+        step2.className = 'flex-1 text-center p-2 rounded bg-blue-500 text-white';
+        statusText.textContent = 'Current Status: Under Review';
+    } else if (status === 'approved') {
+        step1.className = 'flex-1 text-center p-2 rounded bg-green-500 text-white';
+        step2.className = 'flex-1 text-center p-2 rounded bg-green-500 text-white';
+        step3.className = 'flex-1 text-center p-2 rounded bg-green-500 text-white';
+        statusText.textContent = 'Current Status: Approved';
+    } else if (status === 'rejected') {
+        step1.className = 'flex-1 text-center p-2 rounded bg-green-500 text-white';
+        step2.className = 'flex-1 text-center p-2 rounded bg-green-500 text-white';
+        step3.className = 'flex-1 text-center p-2 rounded bg-red-500 text-white';
+        statusText.textContent = 'Current Status: Rejected';
+    }
+}
+
+function approveEnrollment() {
+    // Verify voucher checkboxes are checked if applicable
+    const voucherEligibility = document.getElementById('reviewVoucherEligibility').textContent;
+    if (voucherEligibility.includes('Voucher Eligible')) {
+        const verifyPublicSchool = document.getElementById('verifyPublicSchool').checked;
+        const verifyLRN = document.getElementById('verifyLRN').checked;
+        const verifyPreviousSchool = document.getElementById('verifyPreviousSchool').checked;
+        
+        if (!verifyPublicSchool || !verifyLRN || !verifyPreviousSchool) {
+            alert('Please complete all voucher verification checkboxes before approving.');
+            return;
+        }
+    }
+    
+    updateStatusWorkflow('approved');
+    alert('Enrollment approved successfully!');
+    closeEnrollmentReviewModal();
+    // In real implementation, update database and refresh table
+}
+
+function rejectEnrollment() {
+    const reason = prompt('Please provide a reason for rejection:');
+    if (reason) {
+        updateStatusWorkflow('rejected');
+        alert('Enrollment rejected. Reason: ' + reason);
+        closeEnrollmentReviewModal();
+        // In real implementation, update database and refresh table
+    }
+}
+
+function requestMoreInfo() {
+    const infoNeeded = prompt('What additional information do you need from the student?');
+    if (infoNeeded) {
+        alert('Request for more information sent: ' + infoNeeded);
+        closeEnrollmentReviewModal();
+        // In real implementation, send notification to student
+    }
+}
+
+function filterEnrollments(filter) {
+    // In real implementation, filter the enrollment table based on status
+    console.log('Filtering enrollments by:', filter);
+    // This would update the table to show only matching enrollments
+}
+
+// Mock data for enrollment table (replace with real data from backend)
+function loadEnrollmentApplications() {
+    const tableBody = document.getElementById('enrollmentsTableBody');
+    const mockData = [
+        {
+            name: 'Juan Dela Cruz',
+            level: 'Senior High',
+            strand: 'STEM',
+            voucher: 'Eligible',
+            status: 'submitted',
+            date: '2026-07-01'
+        },
+        {
+            name: 'Maria Santos',
+            level: 'Junior High',
+            strand: 'Grade 8',
+            voucher: 'N/A',
+            status: 'under-review',
+            date: '2026-06-30'
+        },
+        {
+            name: 'Jose Reyes',
+            level: 'Senior High',
+            strand: 'ABM',
+            voucher: 'Not Eligible',
+            status: 'approved',
+            date: '2026-06-28'
+        }
+    ];
+    
+    tableBody.innerHTML = '';
+    mockData.forEach((enrollment, index) => {
+        const statusColors = {
+            'submitted': 'bg-yellow-100 text-yellow-800',
+            'under-review': 'bg-blue-100 text-blue-800',
+            'approved': 'bg-green-100 text-green-800',
+            'rejected': 'bg-red-100 text-red-800'
+        };
+        
+        const row = document.createElement('tr');
+        row.className = 'border-b hover:bg-gray-50';
+        row.innerHTML = `
+            <td class="px-4 py-3">${enrollment.name}</td>
+            <td class="px-4 py-3">${enrollment.level}</td>
+            <td class="px-4 py-3">${enrollment.strand}</td>
+            <td class="px-4 py-3">${enrollment.voucher}</td>
+            <td class="px-4 py-3">
+                <span class="px-2 py-1 rounded-full text-xs font-medium ${statusColors[enrollment.status]}">
+                    ${enrollment.status.charAt(0).toUpperCase() + enrollment.status.slice(1)}
+                </span>
+            </td>
+            <td class="px-4 py-3">${enrollment.date}</td>
+            <td class="px-4 py-3">
+                <button onclick="openEnrollmentReviewModal(${index})" class="text-indigo-600 hover:text-indigo-800 mr-2">
+                    <i class="fas fa-eye"></i> Review
+                </button>
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+// Load enrollment applications when admin tab is shown
+const originalShowAdminTab = showAdminTab;
+showAdminTab = function(tabName, button) {
+    originalShowAdminTab(tabName, button);
+    if (tabName === 'enrollments') {
+        loadEnrollmentApplications();
+    }
+};
 
 // Language Translations
 const translations = {
@@ -1630,451 +2575,280 @@ function updatePayment() {
 const sectionData = {
     'bs-computer-science': [
         { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'CS101', description: 'Introduction to Computing', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 101', 
-            instructor: 'Prof. Reyes', capacity: 30, available: 15 
+            id: '31M1', name: 'BSIT - 31M1', 
+            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 101',
+            subjects: [
+                { code: 'CS101', day: 'Mon', start: '7:30 AM', end: '9:00 AM' },
+                { code: 'MATH101', day: 'Mon', start: '9:00 AM', end: '10:30 AM' },
+                { code: 'ENG101', day: 'Mon', start: '10:30 AM', end: '11:30 AM' },
+                { code: 'CS101', day: 'Wed', start: '7:30 AM', end: '9:00 AM' },
+                { code: 'MATH101', day: 'Wed', start: '9:00 AM', end: '10:30 AM' },
+                { code: 'ENG101', day: 'Wed', start: '10:30 AM', end: '11:30 AM' },
+                { code: 'CS101', day: 'Fri', start: '7:30 AM', end: '9:00 AM' },
+                { code: 'MATH101', day: 'Fri', start: '9:00 AM', end: '10:30 AM' },
+                { code: 'ENG101', day: 'Fri', start: '10:30 AM', end: '11:30 AM' }
+            ]
         },
         { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'CS101', description: 'Introduction to Computing', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 102', 
-            instructor: 'Prof. Santos', capacity: 30, available: 18 
+            id: '31M2', name: 'BSIT - 31M2', 
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 102',
+            subjects: [
+                { code: 'CS101', day: 'Mon', start: '8:00 AM', end: '9:30 AM' },
+                { code: 'MATH101', day: 'Mon', start: '9:30 AM', end: '11:00 AM' },
+                { code: 'ENG101', day: 'Mon', start: '11:00 AM', end: '12:00 PM' },
+                { code: 'CS101', day: 'Wed', start: '8:00 AM', end: '9:30 AM' },
+                { code: 'MATH101', day: 'Wed', start: '9:30 AM', end: '11:00 AM' },
+                { code: 'ENG101', day: 'Wed', start: '11:00 AM', end: '12:00 PM' },
+                { code: 'CS101', day: 'Fri', start: '8:00 AM', end: '9:30 AM' },
+                { code: 'MATH101', day: 'Fri', start: '9:30 AM', end: '11:00 AM' },
+                { code: 'ENG101', day: 'Fri', start: '11:00 AM', end: '12:00 PM' }
+            ]
         },
         { 
-            id: '11M3', name: '11M3', 
-            subjectCode: 'CS101', description: 'Introduction to Computing', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:30 AM', end: '12:30 PM', room: 'Room 103', 
-            instructor: 'Prof. Cruz', capacity: 30, available: 20 
+            id: '31E1', name: 'BSIT - 31E1', 
+            days: 'Mon-Wed-Fri', start: '5:30 PM', end: '9:30 PM', room: 'Room 107',
+            subjects: [
+                { code: 'CS101', day: 'Mon', start: '5:30 PM', end: '7:00 PM' },
+                { code: 'MATH101', day: 'Mon', start: '7:00 PM', end: '8:30 PM' },
+                { code: 'ENG101', day: 'Mon', start: '8:30 PM', end: '9:30 PM' },
+                { code: 'CS101', day: 'Wed', start: '5:30 PM', end: '7:00 PM' },
+                { code: 'MATH101', day: 'Wed', start: '7:00 PM', end: '8:30 PM' },
+                { code: 'ENG101', day: 'Wed', start: '8:30 PM', end: '9:30 PM' },
+                { code: 'CS101', day: 'Fri', start: '5:30 PM', end: '7:00 PM' },
+                { code: 'MATH101', day: 'Fri', start: '7:00 PM', end: '8:30 PM' },
+                { code: 'ENG101', day: 'Fri', start: '8:30 PM', end: '9:30 PM' }
+            ]
         },
         { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'CS102', description: 'Programming Fundamentals', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '12:30 PM', end: '4:30 PM', room: 'Room 104', 
-            instructor: 'Prof. Garcia', capacity: 30, available: 22 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'CS102', description: 'Programming Fundamentals', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 105', 
-            instructor: 'Prof. Torres', capacity: 30, available: 25 
-        },
-        { 
-            id: '11A3', name: '11A3', 
-            subjectCode: 'CS102', description: 'Programming Fundamentals', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:30 PM', end: '5:30 PM', room: 'Room 106', 
-            instructor: 'Prof. Ramos', capacity: 30, available: 28 
-        },
-        { 
-            id: '11E1', name: '11E1', 
-            subjectCode: 'CS103', description: 'Data Structures', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '5:30 PM', end: '9:30 PM', room: 'Room 107', 
-            instructor: 'Prof. Morales', capacity: 30, available: 20 
-        },
-        { 
-            id: '11E2', name: '11E2', 
-            subjectCode: 'CS103', description: 'Data Structures', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 108', 
-            instructor: 'Prof. Flores', capacity: 30, available: 25 
-        },
-        { 
-            id: '12M1', name: '12M1', 
-            subjectCode: 'CS201', description: 'Algorithms', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 109', 
-            instructor: 'Prof. Mendoza', capacity: 30, available: 12 
-        },
-        { 
-            id: '12A1', name: '12A1', 
-            subjectCode: 'CS201', description: 'Algorithms', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 110', 
-            instructor: 'Prof. Villanueva', capacity: 30, available: 15 
-        },
-        { 
-            id: '12E1', name: '12E1', 
-            subjectCode: 'CS201', description: 'Algorithms', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 111', 
-            instructor: 'Prof. Santiago', capacity: 30, available: 18 
+            id: '31E2', name: 'BSIT - 31E2', 
+            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 108',
+            subjects: [
+                { code: 'CS101', day: 'Mon', start: '6:00 PM', end: '7:30 PM' },
+                { code: 'MATH101', day: 'Mon', start: '7:30 PM', end: '9:00 PM' },
+                { code: 'ENG101', day: 'Mon', start: '9:00 PM', end: '10:00 PM' },
+                { code: 'CS101', day: 'Wed', start: '6:00 PM', end: '7:30 PM' },
+                { code: 'MATH101', day: 'Wed', start: '7:30 PM', end: '9:00 PM' },
+                { code: 'ENG101', day: 'Wed', start: '9:00 PM', end: '10:00 PM' },
+                { code: 'CS101', day: 'Fri', start: '6:00 PM', end: '7:30 PM' },
+                { code: 'MATH101', day: 'Fri', start: '7:30 PM', end: '9:00 PM' },
+                { code: 'ENG101', day: 'Fri', start: '9:00 PM', end: '10:00 PM' }
+            ]
         }
     ],
     'bs-biotechnology': [
         { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'BT101', description: 'General Biology', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Lab 201', 
-            instructor: 'Prof. Aquino', capacity: 25, available: 10 
+            id: '31M1', name: 'BSBT - 31M1', 
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Lab 201',
+            subjects: [
+                { code: 'BT101', day: 'Mon', start: '8:00 AM', end: '9:30 AM' },
+                { code: 'CHEM101', day: 'Mon', start: '9:30 AM', end: '11:00 AM' },
+                { code: 'MATH101', day: 'Mon', start: '11:00 AM', end: '12:00 PM' },
+                { code: 'BT101', day: 'Wed', start: '8:00 AM', end: '9:30 AM' },
+                { code: 'CHEM101', day: 'Wed', start: '9:30 AM', end: '11:00 AM' },
+                { code: 'MATH101', day: 'Wed', start: '11:00 AM', end: '12:00 PM' },
+                { code: 'BT101', day: 'Fri', start: '8:00 AM', end: '9:30 AM' },
+                { code: 'CHEM101', day: 'Fri', start: '9:30 AM', end: '11:00 AM' },
+                { code: 'MATH101', day: 'Fri', start: '11:00 AM', end: '12:00 PM' }
+            ]
         },
         { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'BT101', description: 'General Biology', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Lab 202', 
-            instructor: 'Prof. Bautista', capacity: 25, available: 12 
+            id: '31M2', name: 'BSBT - 31M2', 
+            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Lab 202',
+            subjects: [
+                { code: 'BT101', day: 'Mon', start: '9:00 AM', end: '10:30 AM' },
+                { code: 'CHEM101', day: 'Mon', start: '10:30 AM', end: '12:00 PM' },
+                { code: 'MATH101', day: 'Mon', start: '12:00 PM', end: '1:00 PM' },
+                { code: 'BT101', day: 'Wed', start: '9:00 AM', end: '10:30 AM' },
+                { code: 'CHEM101', day: 'Wed', start: '10:30 AM', end: '12:00 PM' },
+                { code: 'MATH101', day: 'Wed', start: '12:00 PM', end: '1:00 PM' },
+                { code: 'BT101', day: 'Fri', start: '9:00 AM', end: '10:30 AM' },
+                { code: 'CHEM101', day: 'Fri', start: '10:30 AM', end: '12:00 PM' },
+                { code: 'MATH101', day: 'Fri', start: '12:00 PM', end: '1:00 PM' }
+            ]
         },
         { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'BT102', description: 'Microbiology', units: 3, type: 'Laboratory',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Lab 203', 
-            instructor: 'Prof. Castro', capacity: 25, available: 18 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'BT102', description: 'Microbiology', units: 3, type: 'Laboratory',
-            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Lab 204', 
-            instructor: 'Prof. Dela Cruz', capacity: 25, available: 20 
-        },
-        { 
-            id: '11E1', name: '11E1', 
-            subjectCode: 'BT103', description: 'Biochemistry', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Lab 205', 
-            instructor: 'Prof. Estanislao', capacity: 25, available: 22 
-        },
-        { 
-            id: '12M1', name: '12M1', 
-            subjectCode: 'BT201', description: 'Genetics', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Lab 206', 
-            instructor: 'Prof. Fernandez', capacity: 25, available: 8 
-        },
-        { 
-            id: '12A1', name: '12A1', 
-            subjectCode: 'BT201', description: 'Genetics', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Lab 207', 
-            instructor: 'Prof. Gonzales', capacity: 25, available: 10 
+            id: '31E1', name: 'BSBT - 31E1', 
+            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Lab 205',
+            subjects: [
+                { code: 'BT101', day: 'Mon', start: '5:00 PM', end: '6:30 PM' },
+                { code: 'CHEM101', day: 'Mon', start: '6:30 PM', end: '8:00 PM' },
+                { code: 'MATH101', day: 'Mon', start: '8:00 PM', end: '9:00 PM' },
+                { code: 'BT101', day: 'Wed', start: '5:00 PM', end: '6:30 PM' },
+                { code: 'CHEM101', day: 'Wed', start: '6:30 PM', end: '8:00 PM' },
+                { code: 'MATH101', day: 'Wed', start: '8:00 PM', end: '9:00 PM' },
+                { code: 'BT101', day: 'Fri', start: '5:00 PM', end: '6:30 PM' },
+                { code: 'CHEM101', day: 'Fri', start: '6:30 PM', end: '8:00 PM' },
+                { code: 'MATH101', day: 'Fri', start: '8:00 PM', end: '9:00 PM' }
+            ]
         }
     ],
     'bs-business-admin': [
         { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'BA101', description: 'Principles of Management', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 301', 
-            instructor: 'Prof. Herrera', capacity: 40, available: 25 
+            id: '31M1', name: 'BSBA - 31M1', 
+            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 301',
+            subjects: [
+                { code: 'BA101', day: 'Mon', start: '7:30 AM', end: '9:00 AM' },
+                { code: 'ECON101', day: 'Mon', start: '9:00 AM', end: '10:30 AM' },
+                { code: 'ENG101', day: 'Mon', start: '10:30 AM', end: '11:30 AM' },
+                { code: 'BA101', day: 'Wed', start: '7:30 AM', end: '9:00 AM' },
+                { code: 'ECON101', day: 'Wed', start: '9:00 AM', end: '10:30 AM' },
+                { code: 'ENG101', day: 'Wed', start: '10:30 AM', end: '11:30 AM' },
+                { code: 'BA101', day: 'Fri', start: '7:30 AM', end: '9:00 AM' },
+                { code: 'ECON101', day: 'Fri', start: '9:00 AM', end: '10:30 AM' },
+                { code: 'ENG101', day: 'Fri', start: '10:30 AM', end: '11:30 AM' }
+            ]
         },
         { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'BA101', description: 'Principles of Management', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 302', 
-            instructor: 'Prof. Ignacio', capacity: 40, available: 28 
+            id: '31M2', name: 'BSBA - 31M2', 
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 302',
+            subjects: [
+                { code: 'BA101', day: 'Mon', start: '8:00 AM', end: '9:30 AM' },
+                { code: 'ECON101', day: 'Mon', start: '9:30 AM', end: '11:00 AM' },
+                { code: 'ENG101', day: 'Mon', start: '11:00 AM', end: '12:00 PM' },
+                { code: 'BA101', day: 'Wed', start: '8:00 AM', end: '9:30 AM' },
+                { code: 'ECON101', day: 'Wed', start: '9:30 AM', end: '11:00 AM' },
+                { code: 'ENG101', day: 'Wed', start: '11:00 AM', end: '12:00 PM' },
+                { code: 'BA101', day: 'Fri', start: '8:00 AM', end: '9:30 AM' },
+                { code: 'ECON101', day: 'Fri', start: '9:30 AM', end: '11:00 AM' },
+                { code: 'ENG101', day: 'Fri', start: '11:00 AM', end: '12:00 PM' }
+            ]
         },
         { 
-            id: '11M3', name: '11M3', 
-            subjectCode: 'BA101', description: 'Principles of Management', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:30 AM', end: '12:30 PM', room: 'Room 303', 
-            instructor: 'Prof. Javier', capacity: 40, available: 30 
-        },
-        { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'BA102', description: 'Business Mathematics', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '12:30 PM', end: '4:30 PM', room: 'Room 304', 
-            instructor: 'Prof. Kalaw', capacity: 40, available: 32 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'BA102', description: 'Business Mathematics', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 305', 
-            instructor: 'Prof. Laurel', capacity: 40, available: 35 
-        },
-        { 
-            id: '11A3', name: '11A3', 
-            subjectCode: 'BA102', description: 'Business Mathematics', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:30 PM', end: '5:30 PM', room: 'Room 306', 
-            instructor: 'Prof. Macapagal', capacity: 40, available: 38 
-        },
-        { 
-            id: '11E1', name: '11E1', 
-            subjectCode: 'BA103', description: 'Marketing Principles', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '5:30 PM', end: '9:30 PM', room: 'Room 307', 
-            instructor: 'Prof. Osmeña', capacity: 40, available: 30 
-        },
-        { 
-            id: '11E2', name: '11E2', 
-            subjectCode: 'BA103', description: 'Marketing Principles', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 308', 
-            instructor: 'Prof. Panganiban', capacity: 40, available: 35 
-        },
-        { 
-            id: '12M1', name: '12M1', 
-            subjectCode: 'BA201', description: 'Financial Management', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 309', 
-            instructor: 'Prof. Quirino', capacity: 40, available: 20 
-        },
-        { 
-            id: '12A1', name: '12A1', 
-            subjectCode: 'BA201', description: 'Financial Management', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 310', 
-            instructor: 'Prof. Recto', capacity: 40, available: 25 
-        },
-        { 
-            id: '12E1', name: '12E1', 
-            subjectCode: 'BA201', description: 'Financial Management', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 311', 
-            instructor: 'Prof. Roxas', capacity: 40, available: 28 
+            id: '31E1', name: 'BSBA - 31E1', 
+            days: 'Mon-Wed-Fri', start: '5:30 PM', end: '9:30 PM', room: 'Room 307',
+            subjects: [
+                { code: 'BA101', day: 'Mon', start: '5:30 PM', end: '7:00 PM' },
+                { code: 'ECON101', day: 'Mon', start: '7:00 PM', end: '8:30 PM' },
+                { code: 'ENG101', day: 'Mon', start: '8:30 PM', end: '9:30 PM' },
+                { code: 'BA101', day: 'Wed', start: '5:30 PM', end: '7:00 PM' },
+                { code: 'ECON101', day: 'Wed', start: '7:00 PM', end: '8:30 PM' },
+                { code: 'ENG101', day: 'Wed', start: '8:30 PM', end: '9:30 PM' },
+                { code: 'BA101', day: 'Fri', start: '5:30 PM', end: '7:00 PM' },
+                { code: 'ECON101', day: 'Fri', start: '7:00 PM', end: '8:30 PM' },
+                { code: 'ENG101', day: 'Fri', start: '8:30 PM', end: '9:30 PM' }
+            ]
         }
     ],
     'md-medicine': [
         { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'MD101', description: 'Human Anatomy', units: 5, type: 'Lecture',
-            days: 'Mon-Fri', start: '7:00 AM', end: '4:00 PM', room: 'Medical Building 1', 
-            instructor: 'Dr. Salgado', capacity: 50, available: 5 
+            id: '31M1', name: 'MD - 31M1', 
+            days: 'Mon-Fri', start: '7:00 AM', end: '4:00 PM', room: 'Medical Building 1',
+            subjects: [
+                { code: 'MD101', day: 'Mon', start: '7:00 AM', end: '10:00 AM' },
+                { code: 'MD102', day: 'Mon', start: '10:00 AM', end: '1:00 PM' },
+                { code: 'MD103', day: 'Mon', start: '1:00 PM', end: '4:00 PM' },
+                { code: 'MD101', day: 'Tue', start: '7:00 AM', end: '10:00 AM' },
+                { code: 'MD102', day: 'Tue', start: '10:00 AM', end: '1:00 PM' },
+                { code: 'MD103', day: 'Tue', start: '1:00 PM', end: '4:00 PM' },
+                { code: 'MD101', day: 'Wed', start: '7:00 AM', end: '10:00 AM' },
+                { code: 'MD102', day: 'Wed', start: '10:00 AM', end: '1:00 PM' },
+                { code: 'MD103', day: 'Wed', start: '1:00 PM', end: '4:00 PM' },
+                { code: 'MD101', day: 'Thu', start: '7:00 AM', end: '10:00 AM' },
+                { code: 'MD102', day: 'Thu', start: '10:00 AM', end: '1:00 PM' },
+                { code: 'MD103', day: 'Thu', start: '1:00 PM', end: '4:00 PM' },
+                { code: 'MD101', day: 'Fri', start: '7:00 AM', end: '10:00 AM' },
+                { code: 'MD102', day: 'Fri', start: '10:00 AM', end: '1:00 PM' },
+                { code: 'MD103', day: 'Fri', start: '1:00 PM', end: '4:00 PM' }
+            ]
         },
         { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'MD101', description: 'Human Anatomy', units: 5, type: 'Lecture',
-            days: 'Mon-Fri', start: '8:00 AM', end: '5:00 PM', room: 'Medical Building 2', 
-            instructor: 'Dr. Singson', capacity: 50, available: 8 
-        },
-        { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'MD102', description: 'Physiology', units: 5, type: 'Lecture',
-            days: 'Mon-Fri', start: '12:00 PM', end: '8:00 PM', room: 'Medical Building 3', 
-            instructor: 'Dr. Tolentino', capacity: 50, available: 10 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'MD102', description: 'Physiology', units: 5, type: 'Lecture',
-            days: 'Mon-Fri', start: '1:00 PM', end: '9:00 PM', room: 'Medical Building 4', 
-            instructor: 'Dr. Valenzuela', capacity: 50, available: 12 
+            id: '31M2', name: 'MD - 31M2', 
+            days: 'Mon-Fri', start: '8:00 AM', end: '5:00 PM', room: 'Medical Building 2',
+            subjects: [
+                { code: 'MD101', day: 'Mon', start: '8:00 AM', end: '11:00 AM' },
+                { code: 'MD102', day: 'Mon', start: '11:00 AM', end: '2:00 PM' },
+                { code: 'MD103', day: 'Mon', start: '2:00 PM', end: '5:00 PM' },
+                { code: 'MD101', day: 'Tue', start: '8:00 AM', end: '11:00 AM' },
+                { code: 'MD102', day: 'Tue', start: '11:00 AM', end: '2:00 PM' },
+                { code: 'MD103', day: 'Tue', start: '2:00 PM', end: '5:00 PM' },
+                { code: 'MD101', day: 'Wed', start: '8:00 AM', end: '11:00 AM' },
+                { code: 'MD102', day: 'Wed', start: '11:00 AM', end: '2:00 PM' },
+                { code: 'MD103', day: 'Wed', start: '2:00 PM', end: '5:00 PM' },
+                { code: 'MD101', day: 'Thu', start: '8:00 AM', end: '11:00 AM' },
+                { code: 'MD102', day: 'Thu', start: '11:00 AM', end: '2:00 PM' },
+                { code: 'MD103', day: 'Thu', start: '2:00 PM', end: '5:00 PM' },
+                { code: 'MD101', day: 'Fri', start: '8:00 AM', end: '11:00 AM' },
+                { code: 'MD102', day: 'Fri', start: '11:00 AM', end: '2:00 PM' },
+                { code: 'MD103', day: 'Fri', start: '2:00 PM', end: '5:00 PM' }
+            ]
         }
     ],
     'bfa-fine-arts': [
         { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'FA101', description: 'Drawing Fundamentals', units: 3, type: 'Laboratory',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Art Studio 1', 
-            instructor: 'Prof. Abad Santos', capacity: 20, available: 12 
+            id: '31M1', name: 'BFA - 31M1', 
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Art Studio 1',
+            subjects: [
+                { code: 'FA101', day: 'Mon', start: '8:00 AM', end: '10:00 AM' },
+                { code: 'FA102', day: 'Mon', start: '10:00 AM', end: '12:00 PM' },
+                { code: 'FA101', day: 'Wed', start: '8:00 AM', end: '10:00 AM' },
+                { code: 'FA102', day: 'Wed', start: '10:00 AM', end: '12:00 PM' },
+                { code: 'FA101', day: 'Fri', start: '8:00 AM', end: '10:00 AM' },
+                { code: 'FA102', day: 'Fri', start: '10:00 AM', end: '12:00 PM' }
+            ]
         },
         { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'FA101', description: 'Drawing Fundamentals', units: 3, type: 'Laboratory',
-            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Art Studio 2', 
-            instructor: 'Prof. Agoncillo', capacity: 20, available: 15 
-        },
-        { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'FA102', description: 'Color Theory', units: 3, type: 'Laboratory',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Art Studio 3', 
-            instructor: 'Prof. Aquino', capacity: 20, available: 18 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'FA102', description: 'Color Theory', units: 3, type: 'Laboratory',
-            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Art Studio 4', 
-            instructor: 'Prof. Bonifacio', capacity: 20, available: 16 
-        },
-        { 
-            id: '11E1', name: '11E1', 
-            subjectCode: 'FA103', description: 'Art History', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Art Studio 5', 
-            instructor: 'Prof. Del Pilar', capacity: 20, available: 14 
-        },
-        { 
-            id: '11E2', name: '11E2', 
-            subjectCode: 'FA103', description: 'Art History', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Art Studio 6', 
-            instructor: 'Prof. Diokno', capacity: 20, available: 17 
+            id: '31M2', name: 'BFA - 31M2', 
+            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Art Studio 2',
+            subjects: [
+                { code: 'FA101', day: 'Mon', start: '9:00 AM', end: '11:00 AM' },
+                { code: 'FA102', day: 'Mon', start: '11:00 AM', end: '1:00 PM' },
+                { code: 'FA101', day: 'Wed', start: '9:00 AM', end: '11:00 AM' },
+                { code: 'FA102', day: 'Wed', start: '11:00 AM', end: '1:00 PM' },
+                { code: 'FA101', day: 'Fri', start: '9:00 AM', end: '11:00 AM' },
+                { code: 'FA102', day: 'Fri', start: '11:00 AM', end: '1:00 PM' }
+            ]
         }
     ],
     'bs-international-relations': [
         { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'IR101', description: 'World Politics', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 401', 
-            instructor: 'Prof. Estrada', capacity: 35, available: 20 
+            id: '31M1', name: 'BSIR - 31M1', 
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 401',
+            subjects: [
+                { code: 'IR101', day: 'Mon', start: '8:00 AM', end: '10:00 AM' },
+                { code: 'POL101', day: 'Mon', start: '10:00 AM', end: '12:00 PM' },
+                { code: 'IR101', day: 'Wed', start: '8:00 AM', end: '10:00 AM' },
+                { code: 'POL101', day: 'Wed', start: '10:00 AM', end: '12:00 PM' },
+                { code: 'IR101', day: 'Fri', start: '8:00 AM', end: '10:00 AM' },
+                { code: 'POL101', day: 'Fri', start: '10:00 AM', end: '12:00 PM' }
+            ]
         },
         { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'IR101', description: 'World Politics', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Room 402', 
-            instructor: 'Prof. Garcia', capacity: 35, available: 22 
-        },
-        { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'IR102', description: 'Diplomacy', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 403', 
-            instructor: 'Prof. Hernandez', capacity: 35, available: 25 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'IR102', description: 'Diplomacy', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Room 404', 
-            instructor: 'Prof. Laurel', capacity: 35, available: 28 
-        },
-        { 
-            id: '11E1', name: '11E1', 
-            subjectCode: 'IR103', description: 'International Law', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Room 405', 
-            instructor: 'Prof. Magsaysay', capacity: 35, available: 30 
-        },
-        { 
-            id: '12M1', name: '12M1', 
-            subjectCode: 'IR201', description: 'Global Economics', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 406', 
-            instructor: 'Prof. Osmena', capacity: 35, available: 18 
-        },
-        { 
-            id: '12A1', name: '12A1', 
-            subjectCode: 'IR201', description: 'Global Economics', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 407', 
-            instructor: 'Prof. Quezon', capacity: 35, available: 20 
-        }
-    ],
-    'bs-mathematics': [
-        { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'MATH101', description: 'Calculus I', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 501', 
-            instructor: 'Prof. Recto', capacity: 30, available: 18 
-        },
-        { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'MATH101', description: 'Calculus I', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 502', 
-            instructor: 'Prof. Salazar', capacity: 30, available: 20 
-        },
-        { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'MATH102', description: 'Linear Algebra', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '12:30 PM', end: '4:30 PM', room: 'Room 503', 
-            instructor: 'Prof. Tan', capacity: 30, available: 22 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'MATH102', description: 'Linear Algebra', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 504', 
-            instructor: 'Prof. Ubalde', capacity: 30, available: 25 
-        },
-        { 
-            id: '11E1', name: '11E1', 
-            subjectCode: 'MATH103', description: 'Statistics', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '5:30 PM', end: '9:30 PM', room: 'Room 505', 
-            instructor: 'Prof. Villanueva', capacity: 30, available: 20 
-        },
-        { 
-            id: '11E2', name: '11E2', 
-            subjectCode: 'MATH103', description: 'Statistics', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '6:00 PM', end: '10:00 PM', room: 'Room 506', 
-            instructor: 'Prof. Yap', capacity: 30, available: 23 
-        },
-        { 
-            id: '12M1', name: '12M1', 
-            subjectCode: 'MATH201', description: 'Calculus II', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '7:30 AM', end: '11:30 AM', room: 'Room 507', 
-            instructor: 'Prof. Zobel', capacity: 30, available: 15 
-        },
-        { 
-            id: '12A1', name: '12A1', 
-            subjectCode: 'MATH201', description: 'Calculus II', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 508', 
-            instructor: 'Prof. Abellana', capacity: 30, available: 17 
-        }
-    ],
-    'bs-physics': [
-        { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'PHY101', description: 'General Physics', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Lab 601', 
-            instructor: 'Prof. Calo', capacity: 25, available: 12 
-        },
-        { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'PHY101', description: 'General Physics', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Lab 602', capacity: 25, available: 14 
-        },
-        { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'PHY102', description: 'Mechanics', units: 3, type: 'Laboratory',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Lab 603', capacity: 25, available: 15 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'PHY102', description: 'Mechanics', units: 3, type: 'Laboratory',
-            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Lab 604', capacity: 25, available: 18 
-        },
-        { 
-            id: '11E1', name: '11E1', 
-            subjectCode: 'PHY103', description: 'Electricity & Magnetism', units: 3, type: 'Laboratory',
-            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Lab 605', capacity: 25, available: 20 
-        },
-        { 
-            id: '12M1', name: '12M1', 
-            subjectCode: 'PHY201', description: 'Thermodynamics', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Lab 606', capacity: 25, available: 10 
-        },
-        { 
-            id: '12A1', name: '12A1', 
-            subjectCode: 'PHY201', description: 'Thermodynamics', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Lab 607', capacity: 25, available: 12 
-        }
-    ],
-    'bs-architecture': [
-        { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'ARCH101', description: 'Design Fundamentals', units: 3, type: 'Laboratory',
-            days: 'Mon-Fri', start: '8:00 AM', end: '3:00 PM', room: 'Design Studio 1', 
-            instructor: 'Prof. Arellano', capacity: 25, available: 8 
-        },
-        { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'ARCH101', description: 'Design Fundamentals', units: 3, type: 'Laboratory',
-            days: 'Mon-Fri', start: '9:00 AM', end: '4:00 PM', room: 'Design Studio 2', capacity: 25, available: 10 
-        },
-        { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'ARCH102', description: 'Architectural Drawing', units: 3, type: 'Laboratory',
-            days: 'Mon-Fri', start: '2:00 PM', end: '9:00 PM', room: 'Design Studio 3', capacity: 25, available: 12 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'ARCH102', description: 'Architectural Drawing', units: 3, type: 'Laboratory',
-            days: 'Mon-Fri', start: '3:00 PM', end: '10:00 PM', room: 'Design Studio 4', capacity: 25, available: 14 
-        },
-        { 
-            id: '12M1', name: '12M1', 
-            subjectCode: 'ARCH201', description: 'Building Materials', units: 3, type: 'Lecture',
-            days: 'Mon-Fri', start: '8:00 AM', end: '3:00 PM', room: 'Design Studio 5', capacity: 25, available: 6 
-        },
-        { 
-            id: '12A1', name: '12A1', 
-            subjectCode: 'ARCH201', description: 'Building Materials', units: 3, type: 'Lecture',
-            days: 'Mon-Fri', start: '2:00 PM', end: '9:00 PM', room: 'Design Studio 6', capacity: 25, available: 8 
+            id: '31M2', name: 'BSIR - 31M2', 
+            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Room 402',
+            subjects: [
+                { code: 'IR101', day: 'Mon', start: '9:00 AM', end: '11:00 AM' },
+                { code: 'POL101', day: 'Mon', start: '11:00 AM', end: '1:00 PM' },
+                { code: 'IR101', day: 'Wed', start: '9:00 AM', end: '11:00 AM' },
+                { code: 'POL101', day: 'Wed', start: '11:00 AM', end: '1:00 PM' },
+                { code: 'IR101', day: 'Fri', start: '9:00 AM', end: '11:00 AM' },
+                { code: 'POL101', day: 'Fri', start: '11:00 AM', end: '1:00 PM' }
+            ]
         }
     ],
     'default': [
         { 
-            id: '11M1', name: '11M1', 
-            subjectCode: 'GEN101', description: 'General Education', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 101', 
-            instructor: 'Prof. Santos', capacity: 30, available: 15 
+            id: '31M1', name: 'Section 31M1', 
+            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 101',
+            subjects: [
+                { code: 'GEN101', day: 'Mon', start: '8:00 AM', end: '10:00 AM' },
+                { code: 'GEN102', day: 'Mon', start: '10:00 AM', end: '12:00 PM' },
+                { code: 'GEN101', day: 'Wed', start: '8:00 AM', end: '10:00 AM' },
+                { code: 'GEN102', day: 'Wed', start: '10:00 AM', end: '12:00 PM' },
+                { code: 'GEN101', day: 'Fri', start: '8:00 AM', end: '10:00 AM' },
+                { code: 'GEN102', day: 'Fri', start: '10:00 AM', end: '12:00 PM' }
+            ]
         },
         { 
-            id: '11M2', name: '11M2', 
-            subjectCode: 'GEN101', description: 'General Education', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '9:00 AM', end: '1:00 PM', room: 'Room 102', 
-            instructor: 'Prof. Reyes', capacity: 30, available: 18 
-        },
-        { 
-            id: '11A1', name: '11A1', 
-            subjectCode: 'GEN102', description: 'General Education', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 103', 
-            instructor: 'Prof. Cruz', capacity: 30, available: 20 
-        },
-        { 
-            id: '11A2', name: '11A2', 
-            subjectCode: 'GEN102', description: 'General Education', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '2:00 PM', end: '6:00 PM', room: 'Room 104', capacity: 30, available: 22 
-        },
-        { 
-            id: '11E1', name: '11E1', 
-            subjectCode: 'GEN103', description: 'General Education', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Room 105', capacity: 30, available: 25 
-        },
-        { 
-            id: '12M1', name: '12M1', 
-            subjectCode: 'GEN201', description: 'General Education', units: 3, type: 'Lecture',
-            days: 'Mon-Wed-Fri', start: '8:00 AM', end: '12:00 PM', room: 'Room 106', capacity: 30, available: 12 
-        },
-        { 
-            id: '12A1', name: '12A1', 
-            subjectCode: 'GEN201', description: 'General Education', units: 3, type: 'Lecture',
-            days: 'Tue-Thu-Sat', start: '1:00 PM', end: '5:00 PM', room: 'Room 107', capacity: 30, available: 15 
+            id: '31E1', name: 'Section 31E1', 
+            days: 'Mon-Wed-Fri', start: '5:00 PM', end: '9:00 PM', room: 'Room 102',
+            subjects: [
+                { code: 'GEN101', day: 'Mon', start: '5:00 PM', end: '7:00 PM' },
+                { code: 'GEN102', day: 'Mon', start: '7:00 PM', end: '9:00 PM' },
+                { code: 'GEN101', day: 'Wed', start: '5:00 PM', end: '7:00 PM' },
+                { code: 'GEN102', day: 'Wed', start: '7:00 PM', end: '9:00 PM' },
+                { code: 'GEN101', day: 'Fri', start: '5:00 PM', end: '7:00 PM' },
+                { code: 'GEN102', day: 'Fri', start: '7:00 PM', end: '9:00 PM' }
+            ]
         }
     ]
 };
@@ -2120,50 +2894,45 @@ function showSectionSelection(programValue, programName) {
     // Get sections for the selected program
     const sections = sectionData[programValue] || sectionData['default'];
     
-    // Populate section options with each section as a separate table/card
+    // Populate section options with subject tables like the reference image
     sectionOptions.innerHTML = sections.map(section => `
-        <div class="border border-gray-200 rounded-lg p-4 hover:border-[#007dfe] hover:bg-blue-50 cursor-pointer transition" onclick="selectSection('${section.id}', '${section.name}', '${section.days}', '${section.start} - ${section.end}', '${section.room}')">
-            <div class="flex justify-between items-start mb-3">
-                <div class="flex-1">
-                    <h4 class="font-bold text-[#007dfe] text-lg mb-1">${section.name}</h4>
-                    <div class="text-sm text-gray-600">${section.subjectCode} - ${section.description}</div>
+        <div class="border border-gray-200 rounded-lg overflow-hidden">
+            <button onclick="selectSection('${section.id}', '${section.name}', '${section.days}', '${section.start} - ${section.end}', '${section.room}')" class="w-full bg-[#007dfe] text-white py-3 px-4 font-medium hover:bg-[#004b87] transition">
+                Enroll to this section
+            </button>
+            <div class="p-4">
+                <h4 class="font-bold text-[#007dfe] text-xl mb-3">${section.name}</h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="border border-gray-300 px-3 py-2 text-left">Subject</th>
+                                <th class="border border-gray-300 px-3 py-2 text-left">Day</th>
+                                <th class="border border-gray-300 px-3 py-2 text-left">Start</th>
+                                <th class="border border-gray-300 px-3 py-2 text-left">End</th>
+                                <th class="border border-gray-300 px-3 py-2 text-center">Enroll</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${section.subjects.map(subject => `
+                                <tr class="border-b">
+                                    <td class="border border-gray-300 px-3 py-2">${subject.code}</td>
+                                    <td class="border border-gray-300 px-3 py-2">${subject.day}</td>
+                                    <td class="border border-gray-300 px-3 py-2">${subject.start}</td>
+                                    <td class="border border-gray-300 px-3 py-2">${subject.end}</td>
+                                    <td class="border border-gray-300 px-3 py-2 text-center">
+                                        <i class="fas fa-check text-green-500"></i>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
                 </div>
-                <div class="text-right ml-4">
-                    <div class="text-sm text-gray-600">Slots Available</div>
-                    <div class="text-2xl font-bold ${section.available < 10 ? 'text-red-500' : 'text-green-500'}">${section.available}/${section.capacity}</div>
-                </div>
+                <p class="text-gray-500 text-sm mt-3">${section.subjects.length} Compatible Subjects</p>
+                <button onclick="selectSection('${section.id}', '${section.name}', '${section.days}', '${section.start} - ${section.end}', '${section.room}')" class="w-full mt-3 bg-[#007dfe] text-white py-3 px-4 font-medium hover:bg-[#004b87] transition">
+                    Enroll to this section
+                </button>
             </div>
-            <table class="w-full text-sm mt-3">
-                <tbody>
-                    <tr class="border-b">
-                        <td class="py-2 font-medium text-gray-600 w-1/3">Units</td>
-                        <td class="py-2">${section.units}</td>
-                    </tr>
-                    <tr class="border-b">
-                        <td class="py-2 font-medium text-gray-600">Type</td>
-                        <td class="py-2">
-                            <span class="px-2 py-1 rounded-full text-xs ${section.type === 'Lecture' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">${section.type}</span>
-                        </td>
-                    </tr>
-                    <tr class="border-b">
-                        <td class="py-2 font-medium text-gray-600">Days</td>
-                        <td class="py-2">${section.days}</td>
-                    </tr>
-                    <tr class="border-b">
-                        <td class="py-2 font-medium text-gray-600">Time</td>
-                        <td class="py-2">${section.start} - ${section.end}</td>
-                    </tr>
-                    <tr class="border-b">
-                        <td class="py-2 font-medium text-gray-600">Room</td>
-                        <td class="py-2">${section.room}</td>
-                    </tr>
-                    <tr>
-                        <td class="py-2 font-medium text-gray-600">Instructor</td>
-                        <td class="py-2">${section.instructor}</td>
-                    </tr>
-                </tbody>
-            </table>
-            <button class="w-full mt-3 bg-[#007dfe] text-white py-2 rounded-lg hover:bg-[#004b87] transition font-medium">Select Section</button>
         </div>
     `).join('');
     
