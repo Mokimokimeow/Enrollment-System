@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="css/all.min.css" />
   <script src="javascript/sweetalert2.all.min.js"></script>
   <script src="javascript/vue.global.js"></script>
-  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/styles.css?v=4" />
 </head>
 
 <body class="bg-gray-100 min-h-screen overflow-x-hidden pt-24">
@@ -108,7 +108,7 @@
             class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-bold text-lg border-4 border-white z-10 step-circle transition-all">
             4
           </div>
-          <span class="text-xs font-semibold mt-2 text-gray-400 step-label">Parents & Docs</span>
+          <span class="text-xs font-semibold mt-2 text-gray-400 step-label">Parents</span>
           <div class="absolute left-1/2 top-5 w-full h-1 bg-gray-200 -z-0 step-line"></div>
         </div>
         <!-- Step 5 Indicator -->
@@ -116,6 +116,15 @@
           <div
             class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-bold text-lg border-4 border-white z-10 step-circle transition-all">
             5
+          </div>
+          <span class="text-xs font-semibold mt-2 text-gray-400 step-label">Documents</span>
+          <div class="absolute left-1/2 top-5 w-full h-1 bg-gray-200 -z-0 step-line"></div>
+        </div>
+        <!-- Step 6 Indicator -->
+        <div class="flex flex-col items-center flex-1 relative" id="step-indicator-6">
+          <div
+            class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-bold text-lg border-4 border-white z-10 step-circle transition-all">
+            6
           </div>
           <span class="text-xs font-semibold mt-2 text-gray-400 step-label">Review & Submit</span>
         </div>
@@ -336,18 +345,14 @@
             <div class="col-span-2">
               <label class="block text-gray-700 font-medium mb-2">
                 Elementary School *
-                <span class="text-xs text-gray-400 font-normal ml-1">(type to search — choose "School Not Found" if not listed)</span>
               </label>
               <input
                 type="text"
                 id="modalElementarySchool"
                 required
-                data-ac-school="true"
-                autocomplete="off"
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Type at least 2 letters to search..."
+                placeholder="Enter elementary school name"
               />
-              <span id="elemSchoolMsg" class="text-xs text-gray-400 mt-1 block">Start typing your elementary school name</span>
             </div>
             <div>
               <label class="block text-gray-700 font-medium mb-2">Year Graduated *</label>
@@ -364,16 +369,13 @@
             <div class="col-span-2">
               <label class="block text-gray-700 font-medium mb-2">
                 High School *
-                <span class="text-xs text-gray-400 font-normal ml-1">(type to search — choose "School Not Found" if not listed)</span>
               </label>
               <input
                 type="text"
                 id="modalHighSchool"
                 required
-                data-ac-school="true"
-                autocomplete="off"
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Type at least 2 letters to search..."
+                placeholder="Enter high school name"
               />
             </div>
             <div>
@@ -387,13 +389,6 @@
               <input type="text" id="modalGrade10Section" required
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="Enter Grade 10 section" />
-            </div>
-            <div class="col-span-2">
-              <label class="block text-gray-700 font-medium mb-2">Senior High School (Optional. Leave it blank if not
-                applicable)</label>
-              <input type="text" id="modalSeniorHighSchool"
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Search senior high school..." />
             </div>
             <div class="col-span-2">
               <label class="flex items-center">
@@ -557,18 +552,6 @@
                 placeholder="Enter mother's middle name" />
             </div>
             <div>
-              <label class="block text-gray-700 font-medium mb-2">Maiden Family Name *</label>
-              <input type="text" id="modalMotherMaidenLastName" required
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Enter maiden family name" />
-            </div>
-            <div>
-              <label class="block text-gray-700 font-medium mb-2">Maiden Given Name *</label>
-              <input type="text" id="modalMotherMaidenFirstName" required
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Enter maiden given name" />
-            </div>
-            <div>
               <label class="block text-gray-700 font-medium mb-2">Maiden Middle Name *</label>
               <input type="text" id="modalMotherMaidenMiddleName" required
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
@@ -653,7 +636,21 @@
             </div>
           </div>
         </div>
+        <!-- Bottom Buttons for Step 4 -->
+        <div class="flex justify-between pt-6">
+          <button type="button" onclick="prevStep(4)"
+            class="bg-gray-200 text-gray-700 px-8 py-3 rounded-lg hover:bg-gray-300 transition font-medium text-lg flex items-center">
+            <i class="fas fa-arrow-left mr-2 text-sm"></i> Back
+          </button>
+          <button type="button" onclick="validateAndConfirmStep(4)"
+            class="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition font-medium text-lg flex items-center">
+            Next <i class="fas fa-arrow-right ml-2 text-sm"></i>
+          </button>
+        </div>
+      </div>
 
+      <!-- Step 5: Document Requirements -->
+      <div class="form-step hidden" data-step="5">
         <!-- Document Uploads (Simulation) -->
         <div class="border-b pb-4 mt-6">
           <h3 class="text-lg font-semibold text-gray-800 mb-3">
@@ -679,63 +676,149 @@
           </div>
         </div>
 
-        <!-- Bottom Buttons for Step 4 -->
+        <!-- Bottom Buttons for Step 5 -->
         <div class="flex justify-between pt-6">
-          <button type="button" onclick="prevStep(4)"
+          <button type="button" onclick="prevStep(5)"
             class="bg-gray-200 text-gray-700 px-8 py-3 rounded-lg hover:bg-gray-300 transition font-medium text-lg flex items-center">
             <i class="fas fa-arrow-left mr-2 text-sm"></i> Back
           </button>
-          <button type="button" onclick="validateAndConfirmStep(4)"
+          <button type="button" onclick="validateAndConfirmStep(5)"
             class="bg-indigo-600 text-white px-8 py-3 rounded-lg hover:bg-indigo-700 transition font-medium text-lg flex items-center">
             Next <i class="fas fa-arrow-right ml-2 text-sm"></i>
           </button>
         </div>
       </div>
 
-      <!-- Step 5: Review & Submit -->
-      <div class="form-step hidden" data-step="5">
+      <!-- Step 6: Review & Submit -->
+      <div class="form-step hidden" data-step="6">
         
         <!-- Summary of Enrollment Card -->
-        <div class="bg-indigo-50/40 border border-indigo-100 rounded-2xl p-6 mb-6">
-          <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
-            <i class="fas fa-file-invoice text-[#007dfe] mr-2"></i>Summary of Enrollment
+        <div id="enrollmentSummaryCard" class="bg-gradient-to-br from-indigo-50/50 to-blue-50/50 border border-indigo-100 rounded-3xl p-8 mb-8 shadow-sm">
+          <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+            <i class="fas fa-id-card text-[#007dfe] mr-3 text-2xl"></i>Summary of Enrollment
           </h3>
-          <div class="grid md:grid-cols-2 gap-6 text-sm">
-            <div class="space-y-3">
-              <p class="text-gray-600"><span
-                  class="font-semibold text-gray-700 block text-xs uppercase tracking-wider mb-0.5">Enrollee Name</span>
-                <span id="summaryEnrolleeName" class="font-medium text-gray-900">—</span></p>
-              <p class="text-gray-600"><span
-                  class="font-semibold text-gray-700 block text-xs uppercase tracking-wider mb-0.5">Academic
-                  Level</span> <span id="summaryAcademicLevel" class="font-medium text-gray-900">—</span></p>
-              <p class="text-gray-600"><span
-                  class="font-semibold text-gray-700 block text-xs uppercase tracking-wider mb-0.5">Selected
-                  Strand/Grade</span> <span id="summarySelectedStrand" class="font-medium text-gray-900">—</span></p>
-              <p class="text-gray-600"><span
-                  class="font-semibold text-gray-700 block text-xs uppercase tracking-wider mb-0.5">Email &
-                  Mobile</span> <span id="summaryContactInfo" class="font-medium text-gray-900">—</span></p>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
+            <!-- Column 1: Personal & Contact Profile -->
+            <div class="bg-white rounded-2xl p-5 border border-indigo-50 shadow-sm space-y-4">
+              <h4 class="text-sm font-bold text-indigo-600 uppercase tracking-wider border-b border-indigo-50 pb-2 mb-3">
+                <i class="fas fa-user-circle mr-2"></i>Personal & Contact Profile
+              </h4>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Enrollee Name</span>
+                  <span id="summaryEnrolleeName" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+                <div>
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Gender & DOB</span>
+                  <span id="summaryGenderDob" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+                <div class="col-span-2">
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Contact Details</span>
+                  <span id="summaryContactInfo" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+                <div class="col-span-2">
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Complete Address</span>
+                  <span id="summaryFullAddress" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+              </div>
             </div>
-            <div class="space-y-3">
-              <p class="text-gray-600"><span
-                  class="font-semibold text-gray-700 block text-xs uppercase tracking-wider mb-0.5">Voucher
-                  Status</span> <span id="summaryVoucherStatus" class="font-medium text-gray-900">—</span></p>
-              <p class="text-gray-600"><span
-                  class="font-semibold text-gray-700 block text-xs uppercase tracking-wider mb-0.5">Total Tuition &
-                  Fees</span> <span id="summaryPaymentTotal" class="font-bold text-lg text-[#007dfe]">₱0</span></p>
-              <p class="text-gray-600"><span
-                  class="font-semibold text-gray-700 block text-xs uppercase tracking-wider mb-0.5">Primary
-                  Parent/Guardian Contact</span> <span id="summaryPrimaryContact"
-                  class="font-medium text-gray-900">—</span></p>
+            
+            <!-- Column 2: Academic Program Details -->
+            <div class="bg-white rounded-2xl p-5 border border-indigo-50 shadow-sm space-y-4">
+              <h4 class="text-sm font-bold text-indigo-600 uppercase tracking-wider border-b border-indigo-50 pb-2 mb-3">
+                <i class="fas fa-graduation-cap mr-2"></i>Academic Program & Schooling
+              </h4>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Academic Level</span>
+                  <span id="summaryAcademicLevel" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+                <div>
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Selected Strand/Grade</span>
+                  <span id="summarySelectedStrand" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+                <div>
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">LRN</span>
+                  <span id="summaryLrn" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+                <div>
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Voucher Status</span>
+                  <span id="summaryVoucherStatus" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+                <div class="col-span-2">
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Previous Schooling</span>
+                  <span id="summaryPrevSchooling" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Column 3: Parent & Family Contact -->
+            <div class="bg-white rounded-2xl p-5 border border-indigo-50 shadow-sm space-y-4 col-span-1 md:col-span-2">
+              <h4 class="text-sm font-bold text-indigo-600 uppercase tracking-wider border-b border-indigo-50 pb-2 mb-3">
+                <i class="fas fa-users mr-2"></i>Family & Emergency Contacts
+              </h4>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Father's Details</span>
+                  <span id="summaryFatherInfo" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+                <div>
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Mother's Details</span>
+                  <span id="summaryMotherInfo" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+                <div>
+                  <span class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-0.5">Guardian's Details (Primary)</span>
+                  <span id="summaryPrimaryContact" class="block font-semibold text-gray-800 text-sm break-words">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Column 4: Document Submissions -->
+            <div class="bg-white rounded-2xl p-5 border border-indigo-50 shadow-sm space-y-4 col-span-1 md:col-span-2">
+              <h4 class="text-sm font-bold text-indigo-600 uppercase tracking-wider border-b border-indigo-50 pb-2 mb-3">
+                <i class="fas fa-folder-open mr-2"></i>Document Attachments Status
+              </h4>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="flex items-center space-x-3 p-3 bg-indigo-50/30 rounded-xl border border-indigo-100">
+                  <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold">
+                    <i class="fas fa-check"></i>
+                  </div>
+                  <div>
+                    <span class="block text-xs text-gray-400 font-bold uppercase tracking-wider">PSA Birth Certificate</span>
+                    <span id="summaryDocBirthCert" class="block text-sm font-semibold text-gray-700 break-all">—</span>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-3 p-3 bg-indigo-50/30 rounded-xl border border-indigo-100">
+                  <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold">
+                    <i class="fas fa-check"></i>
+                  </div>
+                  <div>
+                    <span class="block text-xs text-gray-400 font-bold uppercase tracking-wider">Form 138 / Report Card</span>
+                    <span id="summaryDocReportCard" class="block text-sm font-semibold text-gray-700 break-all">—</span>
+                  </div>
+                </div>
+                <div class="flex items-center space-x-3 p-3 bg-indigo-50/30 rounded-xl border border-indigo-100">
+                  <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold">
+                    <i class="fas fa-check"></i>
+                  </div>
+                  <div>
+                    <span class="block text-xs text-gray-400 font-bold uppercase tracking-wider">Certificate of Good Moral</span>
+                    <span id="summaryDocGoodMoral" class="block text-sm font-semibold text-gray-700 break-all">—</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="mt-4 p-3 bg-white/70 border border-indigo-50/50 rounded-xl text-xs text-gray-500">
-            <i class="fas fa-info-circle text-[#007dfe] mr-1.5"></i>Please review the information above. If everything
-            is correct, accept the Data Privacy Policy and submit your application.
+          
+          <div class="mt-6 p-4 bg-indigo-600/5 border border-indigo-50 rounded-2xl text-xs text-gray-500 flex items-start space-x-2.5">
+            <i class="fas fa-info-circle text-[#007dfe] text-sm mt-0.5"></i>
+            <span>Please carefully review all of the information above before submitting. If everything is accurate, check the Data Privacy Policy and click "Submit Application".</span>
           </div>
         </div>
 
         <!-- Data Privacy Policy -->
-        <div class="border-b pb-4">
+        <div class="border-b pb-4 mb-6">
           <label class="flex items-start">
             <input type="checkbox" id="modalDataPrivacy" required class="mr-3 mt-1" />
             <span class="text-gray-700 text-sm">
@@ -746,57 +829,9 @@
           </label>
         </div>
 
-        <!-- Payment Summary -->
-        <div class="bg-gray-50 rounded-lg p-4 mt-6">
-          <h3 class="text-lg font-semibold text-gray-800 mb-3">
-            <i class="fas fa-receipt mr-2"></i>Payment Summary
-          </h3>
-          <div class="space-y-2 text-sm" id="paymentSummaryContent">
-            <div class="flex justify-between">
-              <span>Tuition Fee:</span>
-              <span id="modalTuitionFee">₱0</span>
-            </div>
-            <div class="flex justify-between">
-              <span>Registration Fee:</span>
-              <span>₱500</span>
-            </div>
-            <div class="flex justify-between">
-              <span>Lab Fee:</span>
-              <span>₱1,000</span>
-            </div>
-            <div class="flex justify-between">
-              <span>Library Fee:</span>
-              <span>₱500</span>
-            </div>
-            <div class="flex justify-between">
-              <span>ID Fee:</span>
-              <span>₱200</span>
-            </div>
-            <div class="flex justify-between" id="uniformFeeRow" style="display: none;">
-              <span>Uniform Fee:</span>
-              <span id="modalUniformFee">₱3,000</span>
-            </div>
-            <div class="flex justify-between text-green-600" id="voucherRow" style="display: none;">
-              <span>Voucher Subsidy:</span>
-              <span id="modalVoucherAmount">-₱22,000</span>
-            </div>
-            <hr class="my-2" />
-            <div class="flex justify-between font-bold text-[#007dfe]">
-              <span>Total to Pay:</span>
-              <span id="modalTotalPayment">₱0</span>
-            </div>
-          </div>
-          <p class="text-xs text-gray-500 mt-2" id="voucherNote" style="display: none;">
-            * Voucher covers tuition, registration, lab, library, and ID fees. Voucher holders only pay for uniforms.
-          </p>
-          <p class="text-xs text-gray-500 mt-2" id="selectLevelNote">
-            * Please select your level to view payment details
-          </p>
-        </div>
-
-        <!-- Bottom Buttons for Step 5 -->
+        <!-- Bottom Buttons for Step 6 -->
         <div class="flex justify-between pt-6">
-          <button type="button" onclick="prevStep(5)"
+          <button type="button" onclick="prevStep(6)"
             class="bg-gray-200 text-gray-700 px-8 py-3 rounded-lg hover:bg-gray-300 transition font-medium text-lg flex items-center">
             <i class="fas fa-arrow-left mr-2 text-sm"></i> Back
           </button>
@@ -1235,38 +1270,7 @@
     <span id="toastMessage"></span>
   </div>
 
-  <!-- Local school autocomplete widget (no CDN) -->
-  <script src="javascript/school-autocomplete.js"></script>
   <script src="javascript/app.js?v=3"></script>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      // Elementary School autocomplete
-      new SchoolAutocomplete({
-        inputId:  'modalElementarySchool',
-        endpoint: 'php/search_schools.php',
-        limit:    12,
-        onSelect: function (school) {
-          const msg = document.getElementById('elemSchoolMsg');
-          if (!msg) return;
-          if (school === 'School Not Found') {
-            msg.className = 'text-xs text-amber-600 mt-1 block';
-            msg.textContent = '⚠ School not in list — your enrollment may need manual verification.';
-          } else {
-            msg.className = 'text-xs text-green-600 mt-1 block';
-            msg.textContent = '✓ School selected';
-          }
-        }
-      });
-
-      // High School autocomplete
-      new SchoolAutocomplete({
-        inputId:  'modalHighSchool',
-        endpoint: 'php/search_schools.php',
-        limit:    12
-      });
-    });
-  </script>
 </body>
 
 </html>

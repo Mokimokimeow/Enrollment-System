@@ -635,8 +635,8 @@ function populateReviewModal(s) {
     document.getElementById('reviewStudentDetails').innerHTML = `
         <div class="flex flex-wrap gap-2 mb-1">
             ${statusBadge(s.status)}
-            ${s.level ? `<span class="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full border border-slate-200">${s.level}</span>` : ''}
-            ${s.strand ? `<span class="text-xs bg-blue-50 text-blue-600 px-2.5 py-0.5 rounded-full border border-blue-200">${s.strand}</span>` : ''}
+            ${s.level ? `<span class="text-xs bg-slate-600 text-white px-2.5 py-0.5 rounded-md shadow-sm font-semibold border border-transparent">${s.level}</span>` : ''}
+            ${s.strand ? `<span class="text-xs bg-indigo-600 text-white px-2.5 py-0.5 rounded-md shadow-sm font-semibold border border-transparent">${s.strand}</span>` : ''}
         </div>
 
         ${sectionCard('fas fa-user-circle', 'Personal Information', `
@@ -669,7 +669,6 @@ function populateReviewModal(s) {
             ${s.high_school                 ? infoRow('High School', s.high_school) : ''}
             ${s.high_school_year_graduated  ? infoRow('HS Graduation Year', s.high_school_year_graduated) : ''}
             ${s.grade10_section             ? infoRow('Grade 10 Section', s.grade10_section) : ''}
-            ${s.senior_high_school          ? infoRow('Senior High School', s.senior_high_school) : ''}
             ${infoRow('Public School Graduate', s.public_school_graduate)}
         `)}
 
@@ -930,9 +929,9 @@ function populateProfileDrawer(s) {
         <!-- Status & Badges -->
         <div class="flex flex-wrap gap-2">
             ${statusBadge(s.status)}
-            ${s.class_section ? `<span class="text-xs font-mono bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200">${s.class_section}</span>` : ''}
-            ${s.level  ? `<span class="text-xs bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full border border-slate-200">${s.level}</span>` : ''}
-            ${s.strand ? `<span class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full border border-indigo-200">${s.strand}</span>` : ''}
+            ${s.class_section ? `<span class="text-xs font-mono bg-blue-600 text-white px-2.5 py-0.5 rounded-md shadow-sm font-semibold border border-transparent">${s.class_section}</span>` : ''}
+            ${s.level  ? `<span class="text-xs bg-slate-600 text-white px-2.5 py-0.5 rounded-md shadow-sm font-semibold border border-transparent">${s.level}</span>` : ''}
+            ${s.strand ? `<span class="text-xs bg-indigo-600 text-white px-2.5 py-0.5 rounded-md shadow-sm font-semibold border border-transparent">${s.strand}</span>` : ''}
         </div>
 
         ${sectionCard('fas fa-user', 'Personal Information', `
@@ -1182,6 +1181,290 @@ function deleteSubject(id) {
 }
 
 
+// ─── Sections Management ──────────────────────────────────────
+let allSections = [];
+let sectionLevelFilter = 'junior';
+
+async function loadAllSections() {
+    try {
+        const res = await fetch('php/api.php?action=getSections');
+        const json = await res.json();
+        if (json.success) {
+            allSections = json.data || [];
+            if(document.getElementById('sectionsTab') && !document.getElementById('sectionsTab').classList.contains('hidden')) {
+                renderSectionsTab();
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load sections", e);
+    }
+}
+
+function updateSectionStrandVisibility() {
+    const level = document.getElementById('sectionLevelSelect').value;
+    const strandSelect = document.getElementById('sectionStrandSelect');
+    if (level === 'senior') {
+        strandSelect.classList.remove('hidden');
+    } else {
+        strandSelect.classList.add('hidden');
+    }
+    updateSectionGradeOptions();
+}
+
+function updateSectionGradeOptions() {
+    const level = document.getElementById('sectionLevelSelect').value;
+    const gradeSelect = document.getElementById('sectionGradeSelect');
+    gradeSelect.innerHTML = '';
+    if (level === 'junior') {
+        ['7', '8', '9', '10'].forEach(g => {
+            gradeSelect.innerHTML += `<option value="${g}">Grade ${g}</option>`;
+        });
+    } else {
+        ['11', '12'].forEach(g => {
+            gradeSelect.innerHTML += `<option value="${g}">Grade ${g}</option>`;
+        });
+    }
+}
+
+function renderSectionsTab() {
+    const level = document.getElementById('sectionLevelSelect').value;
+    const grade = document.getElementById('sectionGradeSelect').value;
+    const strand = level === 'senior' ? document.getElementById('sectionStrandSelect').value : null;
+
+    // Filter sections
+    let filteredSections = allSections.filter(s => s.level === level && s.grade_level === grade);
+    if (strand) filteredSections = filteredSections.filter(s => s.strand === strand);
+
+    // Render Section Cards
+    const grid = document.getElementById('sectionsGrid');
+    if (!filteredSections.length) {
+        grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">No sections found. Click "Add Section" to create one.</div>`;
+    } else {
+        grid.innerHTML = filteredSections.map(sec => `
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col cursor-pointer transition hover:border-blue-300 hover:shadow-md" onclick="selectSectionForAssign(${sec.id})">
+                <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center group">
+                    <div>
+                        <h5 class="font-bold text-slate-800 text-base">${sec.name}</h5>
+                        <p class="text-xs text-slate-500 mt-0.5">${level === 'senior' ? strand + ' • ' : ''}Grade ${grade}</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${sec.student_count >= sec.max_students ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">
+                            ${sec.student_count} / ${sec.max_students}
+                        </span>
+                        <button onclick="event.stopPropagation(); openScheduleModal(${sec.id}, '${sec.name}', '${level}', '${strand || ''}')" class="text-blue-500 hover:text-blue-700 transition opacity-0 group-hover:opacity-100" title="Manage Schedule">
+                            <i class="fas fa-calendar-alt text-sm"></i>
+                        </button>
+                        <button onclick="event.stopPropagation(); deleteSection(${sec.id})" class="text-slate-400 hover:text-red-600 transition opacity-0 group-hover:opacity-100" title="Delete Section">
+                            <i class="fas fa-trash-alt text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-3 bg-white flex-1 max-h-48 overflow-y-auto space-y-1">
+                    ${sec.students && sec.students.length > 0 
+                        ? sec.students.map(st => `
+                            <div class="flex justify-between items-center text-xs py-1.5 px-2 hover:bg-slate-50 rounded group/item">
+                                <span class="font-medium text-slate-700 truncate mr-2" title="${st.first_name} ${st.last_name}">${st.first_name} ${st.last_name}</span>
+                                <button onclick="event.stopPropagation(); unassignStudent(${st.id})" class="text-slate-300 hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition" title="Remove from section">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `).join('') 
+                        : '<div class="text-xs text-slate-400 text-center py-4">No students assigned</div>'
+                    }
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Populate Target Section Dropdown
+    const targetSelect = document.getElementById('assignTargetSection');
+    targetSelect.innerHTML = `<option value="">-- Select Target Section --</option>` + 
+        filteredSections.map(sec => {
+            const secCode = `${sec.level}-${sec.grade_level}-${sec.strand || ''}-${sec.name}`;
+            return `<option value="${secCode}">${sec.name} (${sec.student_count}/${sec.max_students})</option>`;
+        }).join('');
+
+    document.getElementById('sectionAssignTools').classList.remove('hidden');
+
+    // Render Unassigned Students
+    renderUnassignedStudents(level, grade, strand);
+}
+
+function renderUnassignedStudents(level, grade, strand) {
+    const list = document.getElementById('unassignedStudentsList');
+    
+    // Find students matching level/grade/strand who don't have a section yet
+    let unassigned = allStudents.filter(s => 
+        s.status === 'approved' && 
+        (!s.class_section || s.class_section.trim() === '') &&
+        (s.level || '').toLowerCase().includes(level.toLowerCase())
+    );
+
+    if (level === 'senior' && strand) {
+        unassigned = unassigned.filter(s => (s.strand || '').toLowerCase() === strand.toLowerCase());
+    }
+
+    if (!unassigned.length) {
+        list.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">All students in this group are assigned.</div>`;
+        return;
+    }
+
+    list.innerHTML = unassigned.map(st => `
+        <div class="bg-white border border-slate-200 rounded-lg p-3 flex justify-between items-center hover:border-blue-300 transition shadow-sm">
+            <div class="overflow-hidden pr-2">
+                <p class="text-sm font-semibold text-slate-800 truncate" title="${st.first_name} ${st.last_name}">${st.first_name} ${st.last_name}</p>
+                <p class="text-xs text-slate-500 truncate mt-0.5">${st.email}</p>
+            </div>
+            <button onclick="assignStudentToSelectedSection(${st.id})" class="shrink-0 w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition shadow-sm" title="Assign">
+                <i class="fas fa-arrow-left text-xs"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function selectSectionForAssign(sectionId) {
+    const sec = allSections.find(s => s.id == sectionId);
+    if (!sec) return;
+    const secCode = `${sec.level}-${sec.grade_level}-${sec.strand || ''}-${sec.name}`;
+    const targetSelect = document.getElementById('assignTargetSection');
+    targetSelect.value = secCode;
+    
+    // Highlight the selection
+    targetSelect.classList.add('ring-2', 'ring-blue-500');
+    setTimeout(() => targetSelect.classList.remove('ring-2', 'ring-blue-500'), 500);
+}
+
+async function assignStudentToSelectedSection(studentId) {
+    const targetSelect = document.getElementById('assignTargetSection');
+    const sectionCode = targetSelect.value;
+    
+    if (!sectionCode) {
+        Swal.fire({ icon: 'warning', title: 'No Section Selected', text: 'Please select a target section from the dropdown or click on a section card.' });
+        return;
+    }
+
+    try {
+        const res = await fetch('php/api.php?action=assignSection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentId, sectionCode })
+        });
+        const json = await res.json();
+        if (json.success) {
+            await Promise.all([loadAllSections(), loadAllStudents()]);
+            Swal.fire({ icon: 'success', title: 'Assigned', text: 'Student assigned successfully.', timer: 1500, showConfirmButton: false });
+        } else {
+            Swal.fire('Error', json.message || 'Failed to assign student', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Network error.', 'error');
+    }
+}
+
+async function unassignStudent(studentId) {
+    try {
+        const res = await fetch('php/api.php?action=assignSection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentId, sectionCode: null }) // null means unassign
+        });
+        const json = await res.json();
+        if (json.success) {
+            await Promise.all([loadAllSections(), loadAllStudents()]);
+        } else {
+            Swal.fire('Error', json.message || 'Failed to remove student', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Network error.', 'error');
+    }
+}
+
+function openSectionModal() {
+    document.getElementById('sectionForm').reset();
+    const modal = document.getElementById('sectionModal');
+    const content = document.getElementById('sectionModalContent');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+}
+
+function hideSectionModal() {
+    const modal = document.getElementById('sectionModal');
+    const content = document.getElementById('sectionModalContent');
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    setTimeout(() => {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }, 300);
+}
+
+async function saveSection(event) {
+    event.preventDefault();
+    const name = document.getElementById('sectionName').value.trim().toUpperCase();
+    const max_students = document.getElementById('sectionMaxStudents').value;
+    const level = document.getElementById('sectionLevelSelect').value;
+    const grade_level = document.getElementById('sectionGradeSelect').value;
+    const strand = level === 'senior' ? document.getElementById('sectionStrandSelect').value : null;
+
+    if (!name) return;
+
+    Swal.fire({ title: 'Saving…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+        const res = await fetch('php/api.php?action=addSection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, level, grade_level, strand, max_students })
+        });
+        const json = await res.json();
+        
+        if (json.success) {
+            Swal.fire({ icon: 'success', title: 'Saved', text: 'Section added successfully.', timer: 1500, showConfirmButton: false });
+            hideSectionModal();
+            await loadAllSections();
+        } else {
+            Swal.fire('Error', json.message || 'Failed to add section', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Network error.', 'error');
+    }
+}
+
+async function deleteSection(id) {
+    Swal.fire({
+        title: 'Delete Section?',
+        text: 'Are you sure you want to delete this section?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, delete',
+        cancelButtonText: 'Cancel'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                const res = await fetch('php/api.php?action=deleteSection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    Swal.fire({ icon: 'success', title: 'Deleted', text: 'Section deleted.', timer: 1500, showConfirmButton: false });
+                    await loadAllSections();
+                } else {
+                    Swal.fire('Error', json.message || 'Failed to delete section', 'error');
+                }
+            } catch (e) {
+                Swal.fire('Error', 'Network error.', 'error');
+            }
+        }
+    });
+}
+
+
 // ─── Tab Navigation ───────────────────────────────────────────
 function showAdminTab(tabName, button) {
     document.querySelectorAll('.admin-content').forEach(el => el.classList.add('hidden'));
@@ -1216,6 +1499,7 @@ function showAdminTab(tabName, button) {
         dashboard:   'Admin Dashboard',
         enrollments: 'Enrollment Applications',
         students:    'Enrolled Students',
+        sections:    'Manage Class Sections',
         curriculum:  'Curriculum & Subjects',
         fees:        'Tuition & Voucher Settings',
     };
@@ -1223,6 +1507,7 @@ function showAdminTab(tabName, button) {
     if (titleEl) titleEl.textContent = titles[tabName] || 'Admin Dashboard';
 
     if (tabName === 'curriculum') renderCurriculumSubjects();
+    if (tabName === 'sections') renderSectionsTab();
 
     // Auto-close sidebar on mobile
     const overlay = document.getElementById('sidebarOverlay');
@@ -1230,8 +1515,12 @@ function showAdminTab(tabName, button) {
 }
 
 function toggleSidebar() {
-    document.getElementById('adminSidebar').classList.toggle('-translate-x-full');
-    document.getElementById('sidebarOverlay').classList.toggle('hidden');
+    if (window.innerWidth < 768) {
+        document.getElementById('adminSidebar').classList.toggle('-translate-x-full');
+        document.getElementById('sidebarOverlay').classList.toggle('hidden');
+    } else {
+        document.body.classList.toggle('sidebar-collapsed');
+    }
 }
 
 // ─── Session & Auth ───────────────────────────────────────────
@@ -1243,9 +1532,13 @@ async function checkAdminSession() {
         if (result.success && result.user && result.user.role === 'admin') {
             const adminName = result.user.first_name || result.user.name || 'Administrator';
             document.getElementById('adminDisplayName').textContent = result.user.name || adminName;
-            document.getElementById('welcomeAdminName').textContent = adminName;
+            
+            const welcomeEl = document.getElementById('welcomeAdminName');
+            if (welcomeEl) welcomeEl.textContent = adminName;
+
             loadAllStudents();
             loadAllSubjects();
+            loadAllSections();
         } else {
             window.location.href = 'index.html';
         }
@@ -1379,9 +1672,379 @@ function updateDateTime() {
     });
 }
 
+// ─── TEACHERS MANAGEMENT ─────────────────────────────────────
+let allTeachers = [];
+
+async function loadAllTeachers() {
+    try {
+        const res = await fetch('php/api.php?action=getTeachers');
+        const json = await res.json();
+        if (json.success) {
+            allTeachers = json.data;
+            if (document.getElementById('teachersTableBody')) renderTeachersTab();
+        }
+    } catch (e) {
+        console.error('Error loading teachers:', e);
+    }
+}
+
+function renderTeachersTab() {
+    const tbody = document.getElementById('teachersTableBody');
+    if (!tbody) return;
+    if (allTeachers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="px-6 py-8 text-center text-slate-400">No teachers found. Click "Add Teacher" to add one.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = allTeachers.map(t => `
+        <tr class="hover:bg-slate-50 transition">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">${t.name}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${t.department || '-'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <button onclick="deleteTeacher(${t.id})" class="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition" title="Delete">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openTeacherModal() {
+    document.getElementById('teacherForm').reset();
+    const modal = document.getElementById('teacherModal');
+    const content = document.getElementById('teacherModalContent');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+}
+
+function hideTeacherModal() {
+    const modal = document.getElementById('teacherModal');
+    const content = document.getElementById('teacherModalContent');
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    setTimeout(() => {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }, 300);
+}
+
+async function saveTeacher(event) {
+    event.preventDefault();
+    const name = document.getElementById('teacherName').value.trim();
+    const department = document.getElementById('teacherDepartment').value.trim();
+    if (!name) return;
+
+    Swal.fire({ title: 'Saving…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        const res = await fetch('php/api.php?action=addTeacher', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, department })
+        });
+        const json = await res.json();
+        if (json.success) {
+            Swal.fire({ icon: 'success', title: 'Saved', text: 'Teacher added successfully.', timer: 1500, showConfirmButton: false });
+            hideTeacherModal();
+            await loadAllTeachers();
+        } else {
+            Swal.fire('Error', json.message || 'Failed to add teacher', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Network error.', 'error');
+    }
+}
+
+async function deleteTeacher(id) {
+    Swal.fire({
+        title: 'Delete Teacher?',
+        text: 'Are you sure you want to delete this teacher?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, delete'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                const res = await fetch('php/api.php?action=deleteTeacher', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    Swal.fire('Deleted!', 'Teacher has been deleted.', 'success');
+                    await loadAllTeachers();
+                } else {
+                    Swal.fire('Error', json.message, 'error');
+                }
+            } catch (e) {
+                Swal.fire('Error', 'Network error.', 'error');
+            }
+        }
+    });
+}
+
+// ─── SECTION SCHEDULES ────────────────────────────────────────
+let currentScheduleSectionId = null;
+
+async function openScheduleModal(sectionId, sectionName, level, strand) {
+    currentScheduleSectionId = sectionId;
+    document.getElementById('scheduleSectionNameTitle').textContent = sectionName;
+    document.getElementById('schedSectionId').value = sectionId;
+    document.getElementById('scheduleForm').reset();
+
+    // Map level/strand to subject level_strand
+    let subjectKey = level === 'junior' ? 'jhs' : (strand ? strand.toLowerCase() : '');
+
+    // Populate Subjects Dropdown
+    const subjectSelect = document.getElementById('schedSubject');
+    subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+    const relevantSubjects = allSubjects.filter(sub => sub.level_strand === subjectKey || sub.level_strand.includes('core'));
+    relevantSubjects.forEach(sub => {
+        subjectSelect.innerHTML += `<option value="${sub.id}">${sub.code} - ${sub.name}</option>`;
+    });
+
+    // Populate Teachers Dropdown
+    const teacherSelect = document.getElementById('schedTeacher');
+    teacherSelect.innerHTML = '<option value="">-- Select Teacher --</option>';
+    allTeachers.forEach(t => {
+        teacherSelect.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+    });
+
+    // Populate Clone Dropdown
+    const cloneSelect = document.getElementById('cloneScheduleSelect');
+    if (cloneSelect) {
+        cloneSelect.innerHTML = '<option value="">-- Clone From --</option>';
+        allSections.forEach(s => {
+            if (s.id !== sectionId && s.level === level) {
+                cloneSelect.innerHTML += `<option value="${s.id}">Grade ${s.grade_level} - ${s.name}</option>`;
+            }
+        });
+    }
+
+    const modal = document.getElementById('scheduleModal');
+    const content = document.getElementById('scheduleModalContent');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    setTimeout(() => {
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    await loadSectionSchedule(sectionId);
+}
+
+function hideScheduleModal() {
+    const modal = document.getElementById('scheduleModal');
+    const content = document.getElementById('scheduleModalContent');
+    content.classList.remove('scale-100', 'opacity-100');
+    content.classList.add('scale-95', 'opacity-0');
+    setTimeout(() => {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }, 300);
+}
+
+async function loadSectionSchedule(sectionId) {
+    try {
+        const res = await fetch(`php/api.php?action=getSectionSchedule&section_id=${sectionId}`);
+        const json = await res.json();
+        if (json.success) {
+            renderScheduleList(json.data);
+        }
+    } catch (e) {
+        console.error('Error loading schedule:', e);
+    }
+}
+
+function renderScheduleList(scheduleList) {
+    const container = document.getElementById('scheduleListContainer');
+    if (!scheduleList.length) {
+        container.innerHTML = '<div class="text-center py-8 text-slate-400">No classes scheduled yet.</div>';
+        return;
+    }
+
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    let html = '';
+
+    days.forEach(day => {
+        const dayClasses = scheduleList.filter(s => s.day === day);
+        if (dayClasses.length > 0) {
+            html += `
+                <div class="mb-4">
+                    <h4 class="font-bold text-sm text-slate-800 bg-slate-200 px-3 py-1.5 rounded-lg mb-2">${day}</h4>
+                    <div class="space-y-2">
+                        ${dayClasses.map(c => {
+                            const formatTime = (time24) => {
+                                const [h, m] = time24.split(':');
+                                const d = new Date();
+                                d.setHours(h, m);
+                                return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                            };
+                            return `
+                            <div class="bg-white border border-slate-200 rounded-lg p-3 flex justify-between items-center shadow-sm">
+                                <div>
+                                    <div class="font-bold text-blue-600 text-sm">${c.subject_code} - ${c.subject_name}</div>
+                                    <div class="text-xs text-slate-500 mt-0.5"><i class="far fa-clock mr-1"></i>${formatTime(c.start_time)} - ${formatTime(c.end_time)}</div>
+                                    <div class="text-xs text-slate-500 mt-0.5"><i class="fas fa-chalkboard-teacher mr-1"></i>${c.teacher_name} ${c.room ? `• <i class="fas fa-map-marker-alt mx-1"></i>${c.room}` : ''}</div>
+                                </div>
+                                <button onclick="deleteSchedule(${c.id})" class="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded-lg transition" title="Remove Class">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+    });
+    container.innerHTML = html;
+}
+
+async function saveSchedule(event) {
+    event.preventDefault();
+    const section_id = document.getElementById('schedSectionId').value;
+    const subject_id = document.getElementById('schedSubject').value;
+    const teacher_id = document.getElementById('schedTeacher').value;
+    const day = document.getElementById('schedDay').value;
+    const start_time = document.getElementById('schedStartTime').value;
+    const end_time = document.getElementById('schedEndTime').value;
+    const room = document.getElementById('schedRoom').value.trim();
+
+    if (start_time >= end_time) {
+        Swal.fire('Invalid Time', 'Start time must be before end time.', 'warning');
+        return;
+    }
+
+    Swal.fire({ title: 'Saving…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        const res = await fetch('php/api.php?action=addSectionSchedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ section_id, subject_id, teacher_id, day, start_time, end_time, room })
+        });
+        const json = await res.json();
+        if (json.success) {
+            Swal.fire({ icon: 'success', title: 'Added', text: 'Class scheduled successfully.', timer: 1500, showConfirmButton: false });
+            await loadSectionSchedule(section_id);
+            document.getElementById('scheduleForm').reset();
+            document.getElementById('schedSectionId').value = section_id;
+        } else {
+            Swal.fire('Conflict Detected', json.message, 'warning');
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Network error.', 'error');
+    }
+}
+
+async function deleteSchedule(id) {
+    Swal.fire({
+        title: 'Remove Class?',
+        text: 'Are you sure you want to remove this class from the schedule?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, remove'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                const res = await fetch('php/api.php?action=deleteSectionSchedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    Swal.fire('Removed!', 'Class has been removed.', 'success');
+                    await loadSectionSchedule(currentScheduleSectionId);
+                } else {
+                    Swal.fire('Error', json.message, 'error');
+                }
+            } catch (e) {
+                Swal.fire('Error', 'Network error.', 'error');
+            }
+        }
+    });
+}
+
+// ─── BULK OPERATIONS ──────────────────────────────────────────
+
+async function autoAssignStudents() {
+    const level = document.getElementById('sectionLevelSelect').value;
+    const grade = document.getElementById('sectionGradeSelect').value;
+    const strand = level === 'senior' ? document.getElementById('sectionStrandSelect').value : null;
+
+    Swal.fire({
+        title: 'Auto-Assign Students?',
+        text: `This will assign all unassigned students in Grade ${grade} to available sections.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, auto-assign'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'Assigning...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                const res = await fetch('php/api.php?action=autoAssignStudents', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ level, grade, strand })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    Swal.fire('Success', json.message, 'success');
+                    await Promise.all([loadAllSections(), loadAllStudents()]);
+                } else {
+                    Swal.fire('Error', json.message, 'error');
+                }
+            } catch (e) {
+                Swal.fire('Error', 'Network error.', 'error');
+            }
+        }
+    });
+}
+
+async function cloneSchedule() {
+    const sourceSectionId = document.getElementById('cloneScheduleSelect').value;
+    if (!sourceSectionId) {
+        Swal.fire('Error', 'Please select a section to clone from.', 'warning');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Clone Schedule?',
+        text: 'This will copy the schedule from the selected section. Some classes may be skipped if there are time/teacher conflicts.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, clone'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            Swal.fire({ title: 'Cloning...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                const res = await fetch('php/api.php?action=cloneSectionSchedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source_section_id: sourceSectionId, target_section_id: currentScheduleSectionId })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    Swal.fire('Success', json.message, 'success');
+                    await loadSectionSchedule(currentScheduleSectionId);
+                } else {
+                    Swal.fire('Error', json.message, 'error');
+                }
+            } catch (e) {
+                Swal.fire('Error', 'Network error.', 'error');
+            }
+        }
+    });
+}
+
 // ─── Init ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     initAdminDarkMode();
     updateDateTime();
+    updateSectionGradeOptions();
     checkAdminSession();
+    loadAllTeachers();
 });

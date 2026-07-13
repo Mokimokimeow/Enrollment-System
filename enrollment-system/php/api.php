@@ -151,6 +151,53 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
+    // Create sections table if not exists
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `sections` (
+          `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          `name` VARCHAR(50) NOT NULL,
+          `level` VARCHAR(20) NOT NULL,
+          `grade_level` VARCHAR(10) NOT NULL,
+          `strand` VARCHAR(50) DEFAULT NULL,
+          `max_students` INT DEFAULT 40,
+          `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `uniq_section` (`level`, `grade_level`, `strand`, `name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    // Create teachers table if not exists
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `teachers` (
+          `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          `name` VARCHAR(150) NOT NULL,
+          `department` VARCHAR(100) DEFAULT NULL,
+          `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    // Create section_schedules table if not exists
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `section_schedules` (
+          `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          `section_id` INT UNSIGNED NOT NULL,
+          `subject_id` INT UNSIGNED NOT NULL,
+          `teacher_id` INT UNSIGNED NOT NULL,
+          `day` VARCHAR(20) NOT NULL,
+          `start_time` TIME NOT NULL,
+          `end_time` TIME NOT NULL,
+          `room` VARCHAR(50) NOT NULL,
+          `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`),
+          KEY `idx_section_schedules_section` (`section_id`),
+          KEY `idx_section_schedules_teacher` (`teacher_id`),
+          CONSTRAINT `fk_section_schedules_section` FOREIGN KEY (`section_id`) REFERENCES `sections` (`id`) ON DELETE CASCADE,
+          CONSTRAINT `fk_section_schedules_subject` FOREIGN KEY (`subject_id`) REFERENCES `subjects` (`id`) ON DELETE CASCADE,
+          CONSTRAINT `fk_section_schedules_teacher` FOREIGN KEY (`teacher_id`) REFERENCES `teachers` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
     // Seed subjects if table is completely empty
     $subjectCount = $pdo->query("SELECT COUNT(*) FROM `subjects`")->fetchColumn();
     if ($subjectCount == 0) {
@@ -444,7 +491,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $requiredFields[] = 'highSchool';
                 $requiredFields[] = 'highSchoolYearGraduated';
                 $requiredFields[] = 'grade10Section';
-                $requiredFields[] = 'seniorHighSchool';
                 $requiredFields[] = 'publicSchoolGraduate';
             }
             
@@ -825,6 +871,290 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         ob_end_flush();
         exit();
+    } elseif ($action === 'addSubject') {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO subjects (level_strand, code, name, description) VALUES (?, ?, ?, ?)");
+            $stmt->execute([
+                $input['level_strand'],
+                $input['code'],
+                $input['name'],
+                $input['description']
+            ]);
+            $input['id'] = $pdo->lastInsertId();
+            echo json_encode(['success' => true, 'message' => 'Subject added successfully', 'data' => $input]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to add subject: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'updateSubject') {
+        try {
+            $stmt = $pdo->prepare("UPDATE subjects SET level_strand = ?, code = ?, name = ?, description = ? WHERE id = ?");
+            $stmt->execute([
+                $input['level_strand'],
+                $input['code'],
+                $input['name'],
+                $input['description'],
+                $input['id']
+            ]);
+            echo json_encode(['success' => true, 'message' => 'Subject updated successfully']);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to update subject: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'deleteSubject') {
+        try {
+            $stmt = $pdo->prepare("DELETE FROM subjects WHERE id = ?");
+            $stmt->execute([$input['id']]);
+            echo json_encode(['success' => true, 'message' => 'Subject deleted successfully']);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete subject: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'addSection') {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO sections (name, level, grade_level, strand, max_students) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $input['name'],
+                $input['level'],
+                $input['grade_level'],
+                $input['strand'] ?? null,
+                $input['max_students'] ?? 40
+            ]);
+            echo json_encode(['success' => true, 'message' => 'Section created successfully', 'id' => $pdo->lastInsertId()]);
+        } catch (PDOException $e) {
+            if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
+                echo json_encode(['success' => false, 'message' => 'A section with this name already exists for this level/grade/strand.']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Failed to create section: ' . $e->getMessage()]);
+            }
+        }
+    } elseif ($action === 'deleteSection') {
+        try {
+            $secStmt = $pdo->prepare("SELECT * FROM sections WHERE id = ?");
+            $secStmt->execute([$input['id']]);
+            $section = $secStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$section) {
+                echo json_encode(['success' => false, 'message' => 'Section not found']);
+                exit();
+            }
+            $sectionCode = $section['level'] . '-' . $section['grade_level'] . '-' . ($section['strand'] ?? '') . '-' . $section['name'];
+            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE class_section = ? AND status = 'approved'");
+            $countStmt->execute([$sectionCode]);
+            if ($countStmt->fetchColumn() > 0) {
+                echo json_encode(['success' => false, 'message' => 'Cannot delete section with assigned students. Remove students first.']);
+                exit();
+            }
+            $stmt = $pdo->prepare("DELETE FROM sections WHERE id = ?");
+            $stmt->execute([$input['id']]);
+            echo json_encode(['success' => true, 'message' => 'Section deleted successfully']);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete section: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'assignSection') {
+        try {
+            $studentId = $input['studentId'];
+            $sectionCode = $input['sectionCode'] ?? null;
+            $stmt = $pdo->prepare("UPDATE students SET class_section = ? WHERE id = ? AND status = 'approved'");
+            $stmt->execute([$sectionCode, $studentId]);
+            if ($stmt->rowCount() > 0) {
+                echo json_encode(['success' => true, 'message' => $sectionCode ? 'Student assigned to section' : 'Student removed from section']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Student not found or not approved']);
+            }
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to assign section: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'addTeacher') {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO teachers (name, department) VALUES (?, ?)");
+            $stmt->execute([
+                $input['name'],
+                $input['department'] ?? null
+            ]);
+            echo json_encode(['success' => true, 'message' => 'Teacher created successfully', 'id' => $pdo->lastInsertId()]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to create teacher: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'deleteTeacher') {
+        try {
+            $stmt = $pdo->prepare("DELETE FROM teachers WHERE id = ?");
+            $stmt->execute([$input['id']]);
+            echo json_encode(['success' => true, 'message' => 'Teacher deleted successfully']);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete teacher: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'addSectionSchedule') {
+        try {
+            $sectionId = $input['section_id'];
+            $teacherId = $input['teacher_id'];
+            $day = $input['day'];
+            $startTime = $input['start_time']; 
+            $endTime = $input['end_time'];
+
+            // 1. Check Section Conflict
+            $sectionConflictStmt = $pdo->prepare("
+                SELECT id FROM section_schedules 
+                WHERE section_id = ? AND day = ? 
+                AND ((start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?))
+            ");
+            $sectionConflictStmt->execute([$sectionId, $day, $endTime, $startTime, $startTime, $endTime]);
+            if ($sectionConflictStmt->fetch()) {
+                echo json_encode(['success' => false, 'message' => 'Time conflict: This section already has a class scheduled during this time.']);
+                exit();
+            }
+
+            // 2. Check Teacher Conflict
+            $teacherConflictStmt = $pdo->prepare("
+                SELECT section_id FROM section_schedules 
+                WHERE teacher_id = ? AND day = ? 
+                AND ((start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?))
+            ");
+            $teacherConflictStmt->execute([$teacherId, $day, $endTime, $startTime, $startTime, $endTime]);
+            if ($teacherConflictStmt->fetch()) {
+                echo json_encode(['success' => false, 'message' => 'Time conflict: The assigned teacher is already teaching another section during this time.']);
+                exit();
+            }
+
+            $stmt = $pdo->prepare("INSERT INTO section_schedules (section_id, subject_id, teacher_id, day, start_time, end_time, room) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $sectionId,
+                $input['subject_id'],
+                $teacherId,
+                $day,
+                $startTime,
+                $endTime,
+                $input['room'] ?? ''
+            ]);
+            echo json_encode(['success' => true, 'message' => 'Schedule added successfully']);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to add schedule: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'autoAssignStudents') {
+        try {
+            $level = $input['level'] ?? null;
+            $grade = $input['grade'] ?? null;
+            $strand = $input['strand'] ?? null;
+
+            if (!$level || !$grade) {
+                echo json_encode(['success' => false, 'message' => 'Level and grade are required']);
+                exit;
+            }
+
+            $secStmt = $pdo->prepare("SELECT * FROM sections WHERE level = ? AND grade_level = ? AND (strand = ? OR strand IS NULL) ORDER BY name ASC");
+            $secStmt->execute([$level, $grade, $strand]);
+            $sections = $secStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $stuStmt = $pdo->prepare("SELECT id FROM students WHERE status = 'approved' AND (class_section IS NULL OR class_section = '') AND LOWER(level) LIKE ? AND grade_level = ? AND (strand = ? OR strand IS NULL)");
+            $stuStmt->execute(['%'.strtolower($level).'%', $grade, $strand]);
+            $unassigned = $stuStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $assignedCount = 0;
+            $unassignedIndex = 0;
+
+            foreach ($sections as $sec) {
+                $sectionCode = $sec['level'] . '-' . $sec['grade_level'] . '-' . ($sec['strand'] ?? '') . '-' . $sec['name'];
+                
+                $countStmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE class_section = ? AND status = 'approved'");
+                $countStmt->execute([$sectionCode]);
+                $currentCount = $countStmt->fetchColumn();
+                $maxStudents = $sec['max_students'] ?? 40;
+
+                while ($currentCount < $maxStudents && $unassignedIndex < count($unassigned)) {
+                    $studentId = $unassigned[$unassignedIndex]['id'];
+                    $updateStmt = $pdo->prepare("UPDATE students SET class_section = ? WHERE id = ?");
+                    $updateStmt->execute([$sectionCode, $studentId]);
+                    $currentCount++;
+                    $assignedCount++;
+                    $unassignedIndex++;
+                }
+
+                if ($unassignedIndex >= count($unassigned)) {
+                    break;
+                }
+            }
+
+            echo json_encode(['success' => true, 'message' => "Successfully auto-assigned $assignedCount students."]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to auto-assign: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'cloneSectionSchedule') {
+        try {
+            $sourceSectionId = $input['source_section_id'];
+            $targetSectionId = $input['target_section_id'];
+
+            if ($sourceSectionId == $targetSectionId) {
+                echo json_encode(['success' => false, 'message' => 'Cannot clone schedule to the same section.']);
+                exit;
+            }
+
+            $stmt = $pdo->prepare("SELECT subject_id, teacher_id, day, start_time, end_time, room FROM section_schedules WHERE section_id = ?");
+            $stmt->execute([$sourceSectionId]);
+            $sourceSchedule = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($sourceSchedule)) {
+                echo json_encode(['success' => false, 'message' => 'Source section has no schedule.']);
+                exit;
+            }
+
+            $pdo->beginTransaction();
+
+            $insertStmt = $pdo->prepare("INSERT INTO section_schedules (section_id, subject_id, teacher_id, day, start_time, end_time, room) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $conflictCount = 0;
+
+            foreach ($sourceSchedule as $s) {
+                $sectionConflictStmt = $pdo->prepare("
+                    SELECT id FROM section_schedules 
+                    WHERE section_id = ? AND day = ? 
+                    AND ((start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?))
+                ");
+                $sectionConflictStmt->execute([$targetSectionId, $s['day'], $s['end_time'], $s['start_time'], $s['start_time'], $s['end_time']]);
+                if ($sectionConflictStmt->fetch()) {
+                    $conflictCount++;
+                    continue;
+                }
+
+                $teacherConflictStmt = $pdo->prepare("
+                    SELECT id FROM section_schedules 
+                    WHERE teacher_id = ? AND day = ? 
+                    AND ((start_time < ? AND end_time > ?) OR (start_time >= ? AND start_time < ?))
+                ");
+                $teacherConflictStmt->execute([$s['teacher_id'], $s['day'], $s['end_time'], $s['start_time'], $s['start_time'], $s['end_time']]);
+                if ($teacherConflictStmt->fetch()) {
+                    $conflictCount++;
+                    continue;
+                }
+
+                $insertStmt->execute([
+                    $targetSectionId,
+                    $s['subject_id'],
+                    $s['teacher_id'],
+                    $s['day'],
+                    $s['start_time'],
+                    $s['end_time'],
+                    $s['room']
+                ]);
+            }
+
+            $pdo->commit();
+
+            $addedCount = count($sourceSchedule) - $conflictCount;
+            $msg = "Cloned $addedCount classes.";
+            if ($conflictCount > 0) {
+                $msg .= " Skipped $conflictCount due to time conflicts.";
+            }
+
+            echo json_encode(['success' => true, 'message' => $msg]);
+        } catch (PDOException $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            echo json_encode(['success' => false, 'message' => 'Failed to clone schedule: ' . $e->getMessage()]);
+        }
+    } elseif ($action === 'deleteSectionSchedule') {
+        try {
+            $stmt = $pdo->prepare("DELETE FROM section_schedules WHERE id = ?");
+            $stmt->execute([$input['id']]);
+            echo json_encode(['success' => true, 'message' => 'Schedule deleted successfully']);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Failed to delete schedule: ' . $e->getMessage()]);
+        }
     } else {
         error_log('No matching POST endpoint found. Action: ' . $action);
         echo json_encode(['success' => false, 'message' => 'Invalid POST endpoint']);
@@ -1055,129 +1385,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $studentId = $_SESSION['student_id'];
         
         try {
-            $stmt = $pdo->prepare("SELECT * FROM schedules WHERE student_id = ?");
-            $stmt->execute([$studentId]);
-            $schedule = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            if (count($schedule) === 0) {
-                // Fetch student program and strand
-                $studentStmt = $pdo->prepare("SELECT level, strand, grade_level FROM students WHERE id = ?");
-                $studentStmt->execute([$studentId]);
-                $student = $studentStmt->fetch(PDO::FETCH_ASSOC);
-                
-                $level = $student['level'] ?? '';
-                $strand = $student['strand'] ?? '';
-                $gradeLevel = $student['grade_level'] ?? '7';
-                
-                $defaultSchedule = [];
-                if (strpos($level, 'senior') !== false) {
-                    if (strpos($strand, 'stem') !== false) {
-                        $defaultSchedule = [
-                            ['day' => 'monday', 'subject' => 'Pre-Calculus / Basic Calculus', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 201'],
-                            ['day' => 'monday', 'subject' => 'General Chemistry 1', 'time' => '9:15 AM - 10:45 AM', 'room' => 'Lab A'],
-                            ['day' => 'monday', 'subject' => 'Practical Research', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Library'],
-                            ['day' => 'tuesday', 'subject' => 'General Physics 1', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Lab C'],
-                            ['day' => 'tuesday', 'subject' => 'Oral Communication', 'time' => '9:15 AM - 10:45 AM', 'room' => 'Room 202'],
-                            ['day' => 'wednesday', 'subject' => 'Pre-Calculus / Basic Calculus', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 201'],
-                            ['day' => 'wednesday', 'subject' => 'General Biology 1', 'time' => '2:45 PM - 4:15 PM', 'room' => 'Lab B'],
-                            ['day' => 'thursday', 'subject' => 'General Mathematics', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Room 203'],
-                            ['day' => 'thursday', 'subject' => 'Empowerment Technologies', 'time' => '2:45 PM - 4:15 PM', 'room' => 'Computer Lab 1'],
-                            ['day' => 'friday', 'subject' => 'General Physics 1', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Lab C']
-                        ];
-                    } elseif (strpos($strand, 'abm') !== false) {
-                        $defaultSchedule = [
-                            ['day' => 'monday', 'subject' => 'Fundamentals of ABM 1', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 301'],
-                            ['day' => 'monday', 'subject' => 'Business Math', 'time' => '9:15 AM - 10:45 AM', 'room' => 'Room 302'],
-                            ['day' => 'monday', 'subject' => 'Organization and Management', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Room 303'],
-                            ['day' => 'tuesday', 'subject' => 'Principles of Marketing', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 305'],
-                            ['day' => 'tuesday', 'subject' => 'Applied Economics', 'time' => '9:15 AM - 10:45 AM', 'room' => 'Room 306'],
-                            ['day' => 'wednesday', 'subject' => 'Fundamentals of ABM 1', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 301'],
-                            ['day' => 'wednesday', 'subject' => 'Business Finance', 'time' => '2:45 PM - 4:15 PM', 'room' => 'Room 304'],
-                            ['day' => 'thursday', 'subject' => 'Business Ethics', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Room 307'],
-                            ['day' => 'thursday', 'subject' => 'General Mathematics', 'time' => '2:45 PM - 4:15 PM', 'room' => 'Room 308'],
-                            ['day' => 'friday', 'subject' => 'Principles of Marketing', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 305']
-                        ];
-                    } elseif (strpos($strand, 'humss') !== false) {
-                        $defaultSchedule = [
-                            ['day' => 'monday', 'subject' => 'Creative Writing', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 401'],
-                            ['day' => 'monday', 'subject' => 'Intro to World Religions', 'time' => '9:15 AM - 10:45 AM', 'room' => 'Room 402'],
-                            ['day' => 'monday', 'subject' => 'Disciplines and Ideas', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Room 403'],
-                            ['day' => 'tuesday', 'subject' => 'Creative Nonfiction', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 405'],
-                            ['day' => 'tuesday', 'subject' => 'Philippine Politics and Governance', 'time' => '9:15 AM - 10:45 AM', 'room' => 'Room 406'],
-                            ['day' => 'wednesday', 'subject' => 'Creative Writing', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 401'],
-                            ['day' => 'wednesday', 'subject' => 'Community Engagement', 'time' => '2:45 PM - 4:15 PM', 'room' => 'Room 404'],
-                            ['day' => 'thursday', 'subject' => 'General Mathematics', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Room 407'],
-                            ['day' => 'thursday', 'subject' => 'Understanding Culture, Society & Politics', 'time' => '2:45 PM - 4:15 PM', 'room' => 'Room 408'],
-                            ['day' => 'friday', 'subject' => 'Creative Nonfiction', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 405']
-                        ];
-                    } elseif (strpos($strand, 'he') !== false) {
-                        $defaultSchedule = [
-                            ['day' => 'monday', 'subject' => 'Cookery / Culinary Arts', 'time' => '7:30 AM - 10:30 AM', 'room' => 'Kitchen Lab'],
-                            ['day' => 'monday', 'subject' => 'Food and Beverage Services', 'time' => '1:00 PM - 3:00 PM', 'room' => 'Dining Hall'],
-                            ['day' => 'tuesday', 'subject' => 'Bread and Pastry Production', 'time' => '7:30 AM - 10:30 AM', 'room' => 'Baking Lab'],
-                            ['day' => 'tuesday', 'subject' => 'Housekeeping & Tourism', 'time' => '1:00 PM - 3:00 PM', 'room' => 'Tourism Room'],
-                            ['day' => 'wednesday', 'subject' => 'Cookery / Culinary Arts', 'time' => '7:30 AM - 10:30 AM', 'room' => 'Kitchen Lab'],
-                            ['day' => 'thursday', 'subject' => 'Bread and Pastry Production', 'time' => '7:30 AM - 10:30 AM', 'room' => 'Baking Lab'],
-                            ['day' => 'friday', 'subject' => 'Entrepreneurship', 'time' => '8:00 AM - 11:00 AM', 'room' => 'Room 503']
-                        ];
-                    } else { // default TVL-ICT / TVL-CSS
-                        $defaultSchedule = [
-                            ['day' => 'monday', 'subject' => 'Computer Systems Servicing', 'time' => '7:30 AM - 9:30 AM', 'room' => 'CSS Lab'],
-                            ['day' => 'monday', 'subject' => 'Computer Programming', 'time' => '9:45 AM - 11:45 AM', 'room' => 'Programming Lab'],
-                            ['day' => 'monday', 'subject' => 'Web Design & Development', 'time' => '1:00 PM - 2:30 PM', 'room' => 'CSS Lab'],
-                            ['day' => 'tuesday', 'subject' => 'Empowerment Technologies', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Computer Lab 1'],
-                            ['day' => 'tuesday', 'subject' => 'General Mathematics', 'time' => '9:15 AM - 10:45 AM', 'room' => 'Room 501'],
-                            ['day' => 'wednesday', 'subject' => 'Computer Systems Servicing', 'time' => '7:30 AM - 9:30 AM', 'room' => 'CSS Lab'],
-                            ['day' => 'wednesday', 'subject' => 'Web Design & Development', 'time' => '1:00 PM - 2:30 PM', 'room' => 'CSS Lab'],
-                            ['day' => 'thursday', 'subject' => 'Technical English', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Room 502'],
-                            ['day' => 'friday', 'subject' => 'Computer Programming', 'time' => '9:45 AM - 11:45 AM', 'room' => 'Programming Lab']
+            // First get the student's section
+            $studentStmt = $pdo->prepare("SELECT class_section FROM students WHERE id = ?");
+            $studentStmt->execute([$studentId]);
+            $student = $studentStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($student && !empty($student['class_section'])) {
+                $stmt = $pdo->prepare("
+                    SELECT ss.*, sub.name as subject, t.name as teacher_name 
+                    FROM section_schedules ss
+                    JOIN sections s ON ss.section_id = s.id
+                    JOIN subjects sub ON ss.subject_id = sub.id
+                    LEFT JOIN teachers t ON ss.teacher_id = t.id
+                    WHERE CONCAT(s.level, '-', s.grade_level, '-', IFNULL(s.strand, ''), '-', s.name) = ?
+                ");
+                $stmt->execute([$student['class_section']]);
+                $schedule = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $grouped = [
+                    'monday' => [],
+                    'tuesday' => [],
+                    'wednesday' => [],
+                    'thursday' => [],
+                    'friday' => []
+                ];
+                foreach ($schedule as $s) {
+                    $day = strtolower($s['day']);
+                    if (array_key_exists($day, $grouped)) {
+                        $timeStr = date("g:i A", strtotime($s['start_time'])) . ' - ' . date("g:i A", strtotime($s['end_time']));
+                        $grouped[$day][] = [
+                            'subject' => $s['subject'],
+                            'time' => $timeStr,
+                            'room' => ($s['room'] ? $s['room'] . ' ' : '') . ($s['teacher_name'] ? '(' . $s['teacher_name'] . ')' : '')
                         ];
                     }
-                } else { // junior-high
-                    $defaultSchedule = [
-                        ['day' => 'monday', 'subject' => 'English', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 101'],
-                        ['day' => 'monday', 'subject' => 'Mathematics', 'time' => '9:15 AM - 10:45 AM', 'room' => 'Room 102'],
-                        ['day' => 'monday', 'subject' => 'Science', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Room 103'],
-                        ['day' => 'tuesday', 'subject' => 'Filipino', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 104'],
-                        ['day' => 'tuesday', 'subject' => 'Araling Panlipunan', 'time' => '9:15 AM - 10:45 AM', 'room' => 'Room 105'],
-                        ['day' => 'wednesday', 'subject' => 'English', 'time' => '7:30 AM - 9:00 AM', 'room' => 'Room 101'],
-                        ['day' => 'wednesday', 'subject' => 'MAPEH', 'time' => '2:45 PM - 4:15 PM', 'room' => 'Gym'],
-                        ['day' => 'thursday', 'subject' => 'EsP / GMRC', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Room 106'],
-                        ['day' => 'thursday', 'subject' => 'TLE', 'time' => '2:45 PM - 4:15 PM', 'room' => 'Lab 1'],
-                        ['day' => 'friday', 'subject' => 'Science', 'time' => '1:00 PM - 2:30 PM', 'room' => 'Room 103']
-                    ];
                 }
-                
-                $insertStmt = $pdo->prepare("INSERT INTO schedules (student_id, day, subject, time, room) VALUES (?, ?, ?, ?, ?)");
-                foreach ($defaultSchedule as $s) {
-                    $insertStmt->execute([
-                        $studentId, $s['day'], $s['subject'], $s['time'], $s['room']
-                    ]);
-                }
-                
-                $stmt->execute([$studentId]);
-                $schedule = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                echo json_encode(['success' => true, 'data' => $grouped]);
+            } else {
+                // Return empty schedule if student is not assigned to a section
+                $grouped = [
+                    'monday' => [], 'tuesday' => [], 'wednesday' => [], 'thursday' => [], 'friday' => []
+                ];
+                echo json_encode(['success' => true, 'data' => $grouped]);
             }
-            
-            $grouped = [
-                'monday' => [],
-                'tuesday' => [],
-                'wednesday' => [],
-                'thursday' => [],
-                'friday' => []
-            ];
-            foreach ($schedule as $s) {
-                $day = strtolower($s['day']);
-                if (array_key_exists($day, $grouped)) {
-                    $grouped[$day][] = [
-                        'subject' => $s['subject'],
-                        'time' => $s['time'],
-                        'room' => $s['room']
-                    ];
-                }
-            }
-            
-            echo json_encode(['success' => true, 'data' => $grouped]);
         } catch (PDOException $e) {
             echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
         }
@@ -1189,58 +1439,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (PDOException $e) {
             echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
         }
-    } elseif ($action === 'addSubject') {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            exit();
-        }
+    } elseif ($action === 'getSections') {
         try {
-            $stmt = $pdo->prepare("INSERT INTO subjects (level_strand, code, name, description) VALUES (?, ?, ?, ?)");
-            $stmt->execute([
-                $input['level_strand'],
-                $input['code'],
-                $input['name'],
-                $input['description']
-            ]);
-            $input['id'] = $pdo->lastInsertId();
-            echo json_encode(['success' => true, 'message' => 'Subject added successfully', 'data' => $input]);
+            $stmt = $pdo->query("
+                SELECT s.*,
+                    (SELECT COUNT(*) FROM students st WHERE st.class_section = CONCAT(s.level, '-', s.grade_level, '-', IFNULL(s.strand, ''), '-', s.name) AND st.status = 'approved') AS student_count
+                FROM sections s
+                ORDER BY s.level ASC, s.grade_level ASC, s.strand ASC, s.name ASC
+            ");
+            $sections = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($sections as &$sec) {
+                $sectionCode = $sec['level'] . '-' . $sec['grade_level'] . '-' . ($sec['strand'] ?? '') . '-' . $sec['name'];
+                $stStmt = $pdo->prepare("SELECT id, first_name, last_name, email, student_id, level, strand, grade_level FROM students WHERE class_section = ? AND status = 'approved'");
+                $stStmt->execute([$sectionCode]);
+                $sec['students'] = $stStmt->fetchAll(PDO::FETCH_ASSOC);
+                $sec['student_count'] = count($sec['students']);
+            }
+            unset($sec);
+            echo json_encode(['success' => true, 'data' => $sections]);
         } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => 'Failed to add subject: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
         }
-    } elseif ($action === 'updateSubject') {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            exit();
-        }
+    } elseif ($action === 'getTeachers') {
         try {
-            $stmt = $pdo->prepare("UPDATE subjects SET level_strand = ?, code = ?, name = ?, description = ? WHERE id = ?");
-            $stmt->execute([
-                $input['level_strand'],
-                $input['code'],
-                $input['name'],
-                $input['description'],
-                $input['id']
-            ]);
-            echo json_encode(['success' => true, 'message' => 'Subject updated successfully']);
+            $stmt = $pdo->query("SELECT * FROM teachers ORDER BY name ASC");
+            $teachers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            echo json_encode(['success' => true, 'data' => $teachers]);
         } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => 'Failed to update subject: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
         }
-    } elseif ($action === 'deleteSubject') {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            echo json_encode(['success' => false, 'message' => 'Method not allowed']);
-            exit();
-        }
+    } elseif ($action === 'getSectionSchedule') {
         try {
-            $stmt = $pdo->prepare("DELETE FROM subjects WHERE id = ?");
-            $stmt->execute([$input['id']]);
-            echo json_encode(['success' => true, 'message' => 'Subject deleted successfully']);
+            $sectionId = $_GET['section_id'] ?? 0;
+            $stmt = $pdo->prepare("
+                SELECT ss.*, sub.name as subject_name, sub.code as subject_code, t.name as teacher_name 
+                FROM section_schedules ss
+                JOIN subjects sub ON ss.subject_id = sub.id
+                JOIN teachers t ON ss.teacher_id = t.id
+                WHERE ss.section_id = ?
+                ORDER BY FIELD(ss.day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'), ss.start_time ASC
+            ");
+            $stmt->execute([$sectionId]);
+            $schedule = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            echo json_encode(['success' => true, 'data' => $schedule]);
         } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => 'Failed to delete subject: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
         }
+    } else {
+        error_log('No matching GET endpoint found. Action: ' . $action);
+        echo json_encode(['success' => false, 'message' => 'Invalid GET endpoint']);
+        ob_end_flush();
+        exit();
     }
 } else {
     error_log('No matching endpoint found. Action: ' . $action . ' Method: ' . $_SERVER['REQUEST_METHOD']);
-    echo json_encode(['success' => false, 'message' => 'Invalid endpoint']);
+    echo json_encode(['success' => false, 'message' => 'Invalid endpoint method']);
 }
 
 // Ensure response is sent

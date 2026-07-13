@@ -1205,6 +1205,9 @@ function updatePaymentSummary() {
     const modalTuitionFee = document.getElementById('modalTuitionFee');
     const modalTotalPayment = document.getElementById('modalTotalPayment');
     
+    // Guard: if payment summary elements are removed from DOM, skip
+    if (!modalTuitionFee || !modalTotalPayment) return;
+    
     const selectedLevel = levelSelect.value;
     const selectedVoucher = voucherEligibility ? voucherEligibility.value : '';
     
@@ -1411,7 +1414,7 @@ async function handleModalRegistration(e) {
                     highSchool: document.getElementById('modalHighSchool').value,
                     highSchoolYearGraduated: document.getElementById('modalHighSchoolYearGraduated').value,
                     grade10Section: document.getElementById('modalGrade10Section').value,
-                    seniorHighSchool: document.getElementById('modalSeniorHighSchool').value,
+                    seniorHighSchool: '',
                     publicSchoolGraduate: document.getElementById('modalPublicSchoolGraduate').value,
                     level: selectedLevel,
                     gradeLevel: calculatedGradeLevel,
@@ -1478,7 +1481,7 @@ async function handleModalRegistration(e) {
 
 // Step Progression State Management
 let currentStep = 1;
-const totalSteps = 5;
+const totalSteps = 6;
 
 // Email assembler — combines username + selected domain into the hidden #modalEmail field
 function assembleEmail() {
@@ -1654,7 +1657,6 @@ function populateStepSummary(stepNum) {
             { label: 'High School', val: document.getElementById('modalHighSchool').value },
             { label: 'HS Year Graduated', val: document.getElementById('modalHighSchoolYearGraduated').value },
             { label: 'Grade 10 Section', val: document.getElementById('modalGrade10Section').value },
-            { label: 'Senior High School', val: document.getElementById('modalSeniorHighSchool').value || '—' },
             { label: 'Public Graduate?', val: document.getElementById('modalPublicSchoolGraduate').checked ? 'Yes' : 'No' },
             { label: 'Academic Level', val: levelSelect.options[levelSelect.selectedIndex]?.text || '—' },
             { label: 'Strand', val: strandSelect.options[strandSelect.selectedIndex]?.text || '—' },
@@ -1668,16 +1670,28 @@ function populateStepSummary(stepNum) {
             </div>
         `).join('');
     } else if (stepNum === 4) {
-        stepTitle = 'Parents & Documents Summary';
+        stepTitle = 'Parents Info Summary';
+        
+        const fields = [
+            { label: 'Father\'s Name', val: document.getElementById('modalFatherFirstName').value + ' ' + document.getElementById('modalFatherLastName').value },
+            { label: 'Mother\'s Name', val: document.getElementById('modalMotherFirstName').value + ' ' + document.getElementById('modalMotherLastName').value },
+            { label: 'Guardian\'s Name', val: document.getElementById('modalGuardianFirstName').value + ' ' + document.getElementById('modalGuardianLastName').value }
+        ];
+        
+        summaryHTML = fields.map(f => `
+            <div class="bg-white rounded-lg px-4 py-3 border border-indigo-100 border-l-4 border-l-indigo-500 shadow-sm">
+                <span class="block text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1">${f.label}</span>
+                <span class="block text-gray-900 font-semibold text-sm break-words">${f.val || '—'}</span>
+            </div>
+        `).join('');
+    } else if (stepNum === 5) {
+        stepTitle = 'Documents Summary';
         
         const birthCert = document.getElementById('modalDocBirthCert').files[0];
         const reportCard = document.getElementById('modalDocReportCard').files[0];
         const goodMoral = document.getElementById('modalDocGoodMoral').files[0];
         
         const fields = [
-            { label: 'Father\'s Name', val: document.getElementById('modalFatherFirstName').value + ' ' + document.getElementById('modalFatherLastName').value },
-            { label: 'Mother\'s Name', val: document.getElementById('modalMotherFirstName').value + ' ' + document.getElementById('modalMotherLastName').value },
-            { label: 'Guardian\'s Name', val: document.getElementById('modalGuardianFirstName').value + ' ' + document.getElementById('modalGuardianLastName').value },
             { label: 'Birth Certificate', val: birthCert ? birthCert.name : 'Missing' },
             { label: 'Report Card', val: reportCard ? reportCard.name : 'Missing' },
             { label: 'Good Moral Cert', val: goodMoral ? goodMoral.name : 'Missing' }
@@ -1732,6 +1746,134 @@ function hideStepSummaryModal() {
     }
 }
 
+// Populate the Step 6 Review & Submit summary card
+function updateEnrollmentSummary() {
+    const val = (id) => {
+        const el = document.getElementById(id);
+        if (!el) return '';
+        return el.value ? el.value.trim() : '';
+    };
+    const selText = (id) => {
+        const el = document.getElementById(id);
+        if (!el || el.selectedIndex < 0) return '—';
+        const txt = el.options[el.selectedIndex]?.text || '';
+        return txt.startsWith('--') ? '—' : txt;
+    };
+
+    // --- Personal & Contact ---
+    const firstName = val('modalFirstName');
+    const middleName = val('modalMiddleName');
+    const lastName = val('modalLastName');
+    const suffix = val('modalSuffix');
+    const fullName = [firstName, middleName, lastName, suffix].filter(Boolean).join(' ');
+    const gender = val('modalGender') || '—';
+    const dob = val('modalDob') || '—';
+    const phone = val('modalPhone') ? '+63' + val('modalPhone') : '—';
+    const email = val('modalEmail') || '—';
+
+    const setEl = (id, html) => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = html;
+    };
+
+    setEl('summaryEnrolleeName', fullName || '—');
+    setEl('summaryGenderDob', `${gender} &bull; ${dob}`);
+    setEl('summaryContactInfo', `${phone} &bull; ${email}`);
+
+    // --- Address ---
+    const address = val('modalAddress');
+    const region = selText('modalRegion');
+    const province = selText('modalProvince');
+    const city = selText('modalCity');
+    const barangay = selText('modalBarangay');
+    const zip = val('modalZipCode');
+    const addressParts = [address, barangay, city, province, region, zip].filter(v => v && v !== '—');
+    setEl('summaryFullAddress', addressParts.length ? addressParts.join(', ') : '—');
+
+    // --- Academic ---
+    setEl('summaryAcademicLevel', selText('modalLevel'));
+
+    const strandEl = document.getElementById('modalStrand');
+    const gradeLevelEl = document.getElementById('modalGradeLevel');
+    let strandOrGrade = '—';
+    if (strandEl && strandEl.value) {
+        strandOrGrade = selText('modalStrand');
+    } else if (gradeLevelEl && gradeLevelEl.value) {
+        strandOrGrade = 'Grade ' + gradeLevelEl.value;
+    }
+    setEl('summarySelectedStrand', strandOrGrade);
+
+    setEl('summaryLrn', val('modalLRN') || '—');
+    setEl('summaryVoucherStatus', selText('modalVoucherEligibility'));
+
+    const elemSchool = val('modalElementarySchool') || '—';
+    const elemYear = val('modalElementaryYearGraduated') || '';
+    const hsSchool = val('modalHighSchool') || '—';
+    const hsYear = val('modalHighSchoolYearGraduated') || '';
+    const schoolingLines = [];
+    schoolingLines.push(`Elementary: ${elemSchool}${elemYear ? ' (' + elemYear + ')' : ''}`);
+    schoolingLines.push(`High School: ${hsSchool}${hsYear ? ' (' + hsYear + ')' : ''}`);
+    setEl('summaryPrevSchooling', schoolingLines.join('<br>'));
+
+    // --- Parents & Guardian ---
+    const fatherName = [val('modalFatherFirstName'), val('modalFatherMiddleName'), val('modalFatherLastName')].filter(Boolean).join(' ') || '—';
+    const fatherPhone = val('modalFatherPhone') ? '+63' + val('modalFatherPhone') : '';
+    const fatherOcc = val('modalFatherOccupation') || '';
+    const fatherDeceased = document.getElementById('modalFatherDeceased')?.checked;
+    let fatherHTML = fatherDeceased ? `<span class="text-red-500 font-bold">Deceased</span>` : fatherName;
+    if (!fatherDeceased) {
+        const extras = [fatherOcc, fatherPhone].filter(Boolean).join(' &bull; ');
+        if (extras) fatherHTML += `<br><span class="text-xs text-gray-500">${extras}</span>`;
+    }
+    setEl('summaryFatherInfo', fatherHTML);
+
+    const motherName = [val('modalMotherFirstName'), val('modalMotherMiddleName'), val('modalMotherLastName')].filter(Boolean).join(' ') || '—';
+    const motherPhone = val('modalMotherPhone') ? '+63' + val('modalMotherPhone') : '';
+    const motherOcc = val('modalMotherOccupation') || '';
+    const motherDeceased = document.getElementById('modalMotherDeceased')?.checked;
+    let motherHTML = motherDeceased ? `<span class="text-red-500 font-bold">Deceased</span>` : motherName;
+    if (!motherDeceased) {
+        const extras = [motherOcc, motherPhone].filter(Boolean).join(' &bull; ');
+        if (extras) motherHTML += `<br><span class="text-xs text-gray-500">${extras}</span>`;
+    }
+    setEl('summaryMotherInfo', motherHTML);
+
+    const guardianName = [val('modalGuardianFirstName'), val('modalGuardianMiddleName'), val('modalGuardianLastName')].filter(Boolean).join(' ') || '—';
+    const guardianPhone = val('modalGuardianPhone') ? '+63' + val('modalGuardianPhone') : '';
+    const guardianOcc = val('modalGuardianOccupation') || '';
+    let guardianHTML = guardianName;
+    const gExtras = [guardianOcc, guardianPhone].filter(Boolean).join(' &bull; ');
+    if (gExtras) guardianHTML += `<br><span class="text-xs text-gray-500">${gExtras}</span>`;
+    setEl('summaryPrimaryContact', guardianHTML);
+
+    // --- Documents ---
+    const docFields = [
+        { inputId: 'modalDocBirthCert', summaryId: 'summaryDocBirthCert' },
+        { inputId: 'modalDocReportCard', summaryId: 'summaryDocReportCard' },
+        { inputId: 'modalDocGoodMoral', summaryId: 'summaryDocGoodMoral' }
+    ];
+    docFields.forEach(doc => {
+        const fileInput = document.getElementById(doc.inputId);
+        const summaryEl = document.getElementById(doc.summaryId);
+        const iconContainer = summaryEl?.closest('.flex')?.querySelector('.w-8');
+        
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+            if (summaryEl) summaryEl.textContent = fileInput.files[0].name;
+            if (iconContainer) {
+                iconContainer.className = 'w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold';
+                iconContainer.innerHTML = '<i class="fas fa-check"></i>';
+            }
+        } else {
+            if (summaryEl) summaryEl.textContent = 'Not uploaded';
+            if (iconContainer) {
+                iconContainer.className = 'w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center font-bold';
+                iconContainer.innerHTML = '<i class="fas fa-exclamation"></i>';
+            }
+        }
+    });
+}
+window.updateEnrollmentSummary = updateEnrollmentSummary;
+
 function nextStep(stepNum) {
     if (stepNum >= totalSteps) return;
     
@@ -1746,6 +1888,11 @@ function nextStep(stepNum) {
         
         currentStep = stepNum + 1;
         updateStepperUI();
+        
+        // Populate the enrollment summary when entering Step 6
+        if (currentStep === 6) {
+            updateEnrollmentSummary();
+        }
         
         // Scroll to form top
         const formTop = document.getElementById('register-section');
@@ -1837,7 +1984,7 @@ document.addEventListener('DOMContentLoaded', function() {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             
-            // Basic validation for step 5
+            // Basic validation for step 6
             const dataPrivacy = document.getElementById('modalDataPrivacy');
             if (dataPrivacy && !dataPrivacy.checked) {
                 showToast('Please accept the Data Privacy Policy', 'error');
@@ -2702,7 +2849,8 @@ function openEnrollmentReviewModal(enrollmentId) {
                     document.getElementById('reviewHighSchool').textContent = student.high_school || 'N/A';
                     document.getElementById('reviewHighSchoolYear').textContent = student.high_school_year_graduated || 'N/A';
                     document.getElementById('reviewGrade10Section').textContent = student.grade10_section || 'N/A';
-                    document.getElementById('reviewSeniorHigh').textContent = student.senior_high_school || 'N/A';
+                    const reviewSeniorHigh = document.getElementById('reviewSeniorHigh');
+                    if (reviewSeniorHigh) reviewSeniorHigh.textContent = student.senior_high_school || 'N/A';
                     document.getElementById('reviewPublicSchool').textContent = student.public_school_graduate || 'N/A';
                     
                     document.getElementById('reviewLevel').textContent = student.level || 'N/A';
@@ -2746,7 +2894,8 @@ function openEnrollmentReviewModal(enrollmentId) {
             document.getElementById('reviewHighSchool').textContent = 'Biringan High School';
             document.getElementById('reviewHighSchoolYear').textContent = '2024';
             document.getElementById('reviewGrade10Section').textContent = 'Section A';
-            document.getElementById('reviewSeniorHigh').textContent = 'N/A';
+            const reviewSeniorHigh = document.getElementById('reviewSeniorHigh');
+            if (reviewSeniorHigh) reviewSeniorHigh.textContent = 'N/A';
             document.getElementById('reviewPublicSchool').textContent = 'Yes';
             
             document.getElementById('reviewLevel').textContent = 'Senior High';
@@ -3069,7 +3218,7 @@ const translations = {
         navPrograms: 'Programs',
         navGuide: 'Guide',
         navPayment: 'Payment Instructions',
-        navRegister: 'Register',
+        navRegister: 'Enrollment',
         welcomeTitle: 'Welcome to Our University',
         welcomeSubtitle: 'Excellence in Education Since 1950',
         applyNow: 'Apply Now',
@@ -5028,6 +5177,44 @@ function updateEnrollmentSummary() {
     const summaryEnrolleeName = document.getElementById('summaryEnrolleeName');
     if (summaryEnrolleeName) summaryEnrolleeName.textContent = nameText;
     
+    // Gender & DOB
+    const dob = document.getElementById('modalDob')?.value || '';
+    const genderSelect = document.getElementById('modalGender');
+    const gender = genderSelect ? genderSelect.options[genderSelect.selectedIndex]?.text : '';
+    const genderDobText = (gender || dob) ? `${gender || '—'} / ${dob || '—'}` : '—';
+    const summaryGenderDob = document.getElementById('summaryGenderDob');
+    if (summaryGenderDob) summaryGenderDob.textContent = genderDobText;
+    
+    // Email & Mobile
+    const email = document.getElementById('modalEmail')?.value || '';
+    const phone = document.getElementById('modalPhone')?.value || '';
+    const contactText = (email || phone) ? `${email || '—'} / ${phone ? '+63' + phone : '—'}` : '—';
+    const summaryContactInfo = document.getElementById('summaryContactInfo');
+    if (summaryContactInfo) summaryContactInfo.textContent = contactText;
+
+    // Full Address
+    const address = document.getElementById('modalAddress')?.value || '';
+    const regionSelect = document.getElementById('modalRegion');
+    const regionText = regionSelect && regionSelect.selectedIndex > 0 ? regionSelect.options[regionSelect.selectedIndex].text : '';
+    const provinceSelect = document.getElementById('modalProvince');
+    const provinceText = provinceSelect && provinceSelect.selectedIndex > 0 ? provinceSelect.options[provinceSelect.selectedIndex].text : '';
+    const citySelect = document.getElementById('modalCity');
+    const cityText = citySelect && citySelect.selectedIndex > 0 ? citySelect.options[citySelect.selectedIndex].text : '';
+    const barangaySelect = document.getElementById('modalBarangay');
+    const barangayText = barangaySelect && barangaySelect.selectedIndex > 0 ? barangaySelect.options[barangaySelect.selectedIndex].text : '';
+    const zip = document.getElementById('modalZipCode')?.value || '';
+    
+    let fullAddress = address;
+    const addressParts = [barangayText, cityText, provinceText, regionText].filter(p => p && !p.startsWith('--'));
+    if (addressParts.length > 0) {
+        fullAddress += (fullAddress ? ', ' : '') + addressParts.join(', ');
+    }
+    if (zip) {
+        fullAddress += ` (${zip})`;
+    }
+    const summaryFullAddress = document.getElementById('summaryFullAddress');
+    if (summaryFullAddress) summaryFullAddress.textContent = fullAddress || '—';
+    
     // Level
     const levelSelect = document.getElementById('modalLevel');
     const levelVal = levelSelect?.value || '';
@@ -5057,13 +5244,11 @@ function updateEnrollmentSummary() {
     }
     const summarySelectedStrand = document.getElementById('summarySelectedStrand');
     if (summarySelectedStrand) summarySelectedStrand.textContent = strandText;
-    
-    // Email & Mobile
-    const email = document.getElementById('modalEmail')?.value || '';
-    const phone = document.getElementById('modalPhone')?.value || '';
-    const contactText = (email || phone) ? `${email} / ${phone}` : '—';
-    const summaryContactInfo = document.getElementById('summaryContactInfo');
-    if (summaryContactInfo) summaryContactInfo.textContent = contactText;
+
+    // LRN
+    const lrn = document.getElementById('modalLRN')?.value || '—';
+    const summaryLrn = document.getElementById('summaryLrn');
+    if (summaryLrn) summaryLrn.textContent = lrn;
     
     // Voucher
     const voucherSelect = document.getElementById('modalVoucherEligibility');
@@ -5076,25 +5261,76 @@ function updateEnrollmentSummary() {
     const summaryVoucherStatus = document.getElementById('summaryVoucherStatus');
     if (summaryVoucherStatus) summaryVoucherStatus.textContent = voucherText;
     
-    // Total payment
-    const totalPayText = document.getElementById('modalTotalPayment')?.textContent || '₱0';
-    const summaryPaymentTotal = document.getElementById('summaryPaymentTotal');
-    if (summaryPaymentTotal) summaryPaymentTotal.textContent = totalPayText;
+    // Previous Schooling
+    const elem = document.getElementById('modalElementarySchool')?.value || '';
+    const elemYear = document.getElementById('modalElementaryYearGraduated')?.value || '';
+    const hs = document.getElementById('modalHighSchool')?.value || '';
+    const hsYear = document.getElementById('modalHighSchoolYearGraduated')?.value || '';
     
-    // Primary contact (Father / Mother / Guardian)
-    const fatherName = document.getElementById('modalFatherFirstName')?.value || '';
-    const motherName = document.getElementById('modalMotherFirstName')?.value || '';
-    const guardianName = document.getElementById('modalGuardianFirstName')?.value || '';
-    let primaryContactText = '—';
-    if (guardianName) {
-        primaryContactText = `Guardian: ${document.getElementById('modalGuardianLastName')?.value || ''}, ${guardianName}`;
-    } else if (motherName) {
-        primaryContactText = `Mother: ${document.getElementById('modalMotherLastName')?.value || ''}, ${motherName}`;
-    } else if (fatherName) {
-        primaryContactText = `Father: ${document.getElementById('modalFatherLastName')?.value || ''}, ${fatherName}`;
+    let schoolingHTML = '';
+    if (elem) schoolingHTML += `<div><strong>Elem:</strong> ${elem} (${elemYear || '—'})</div>`;
+    if (hs) schoolingHTML += `<div><strong>HS:</strong> ${hs} (${hsYear || '—'})</div>`;
+    const summaryPrevSchooling = document.getElementById('summaryPrevSchooling');
+    if (summaryPrevSchooling) summaryPrevSchooling.innerHTML = schoolingHTML || '—';
+    
+    // Father / Mother / Guardian Contact
+    const fatherF = document.getElementById('modalFatherFirstName')?.value || '';
+    const fatherL = document.getElementById('modalFatherLastName')?.value || '';
+    const fatherPhone = document.getElementById('modalFatherPhone')?.value || '';
+    const fatherOcc = document.getElementById('modalFatherOccupation')?.value || '';
+    const fatherDeceased = document.getElementById('modalFatherDeceased')?.checked;
+    
+    let fatherText = '—';
+    if (fatherF || fatherL) {
+        if (fatherDeceased) {
+            fatherText = `Name: ${fatherL}, ${fatherF} (Deceased)`;
+        } else {
+            fatherText = `Name: ${fatherL}, ${fatherF}<br>Phone: ${fatherPhone || '—'}<br>Occ: ${fatherOcc || '—'}`;
+        }
+    }
+    const summaryFatherInfo = document.getElementById('summaryFatherInfo');
+    if (summaryFatherInfo) summaryFatherInfo.innerHTML = fatherText;
+    
+    const motherF = document.getElementById('modalMotherFirstName')?.value || '';
+    const motherL = document.getElementById('modalMotherLastName')?.value || '';
+    const motherPhone = document.getElementById('modalMotherPhone')?.value || '';
+    const motherOcc = document.getElementById('modalMotherOccupation')?.value || '';
+    const motherDeceased = document.getElementById('modalMotherDeceased')?.checked;
+    
+    let motherText = '—';
+    if (motherF || motherL) {
+        if (motherDeceased) {
+            motherText = `Name: ${motherL}, ${motherF} (Deceased)`;
+        } else {
+            motherText = `Name: ${motherL}, ${motherF}<br>Phone: ${motherPhone || '—'}<br>Occ: ${motherOcc || '—'}`;
+        }
+    }
+    const summaryMotherInfo = document.getElementById('summaryMotherInfo');
+    if (summaryMotherInfo) summaryMotherInfo.innerHTML = motherText;
+    
+    const guardianF = document.getElementById('modalGuardianFirstName')?.value || '';
+    const guardianL = document.getElementById('modalGuardianLastName')?.value || '';
+    const guardianPhone = document.getElementById('modalGuardianPhone')?.value || '';
+    const guardianOcc = document.getElementById('modalGuardianOccupation')?.value || '';
+    
+    let guardianText = '—';
+    if (guardianF || guardianL) {
+        guardianText = `Name: ${guardianL}, ${guardianF}<br>Phone: ${guardianPhone || '—'}<br>Occ: ${guardianOcc || '—'}`;
     }
     const summaryPrimaryContact = document.getElementById('summaryPrimaryContact');
-    if (summaryPrimaryContact) summaryPrimaryContact.textContent = primaryContactText;
+    if (summaryPrimaryContact) summaryPrimaryContact.innerHTML = guardianText;
+
+    // Document attachments
+    const birthCert = document.getElementById('modalDocBirthCert')?.files[0];
+    const reportCard = document.getElementById('modalDocReportCard')?.files[0];
+    const goodMoral = document.getElementById('modalDocGoodMoral')?.files[0];
+    
+    const docBirth = document.getElementById('summaryDocBirthCert');
+    if (docBirth) docBirth.textContent = birthCert ? birthCert.name : 'Missing';
+    const docReport = document.getElementById('summaryDocReportCard');
+    if (docReport) docReport.textContent = reportCard ? reportCard.name : 'Missing';
+    const docMoral = document.getElementById('summaryDocGoodMoral');
+    if (docMoral) docMoral.textContent = goodMoral ? goodMoral.name : 'Missing';
 }
 
 window.updateEnrollmentSummary = updateEnrollmentSummary;
